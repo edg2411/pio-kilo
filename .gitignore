@@ -1,0 +1,34 @@
+# PlatformIO
+.pio/
+.vscode/
+*.pyc
+
+# ESP32
+data/
+!data/config.json.example
+
+# PlatformIO framework docs (not needed in project)
+docs/
+
+# Build files
+build/
+dist/
+
+# IDE
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+
+# Certificates (keep example)
+*.pem
+*.crt
+*.key
+!ca.pem.example
+!client.pem.example
+!private.key.example
