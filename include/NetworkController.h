@@ -35,7 +35,7 @@ private:
     EthernetModule* ethernet;
     LTEModule* lte;
 
-    std::vector<NetInterface> priorityOrder = {WIFI, ETHERNET, LTE};
+    std::vector<NetInterface> priorityOrder = {ETHERNET, WIFI, LTE};
     int retryCount;
     const int maxRetries = 3;
     unsigned long lastRetryTime;
@@ -62,6 +62,7 @@ public:
     void setWiFiCredentials(const String& ssid, const String& password);
     void setWiFiStaticIP(IPAddress ip, IPAddress gateway, IPAddress subnet, IPAddress dns1, IPAddress dns2);
     void setEthernetConfig(byte mac[6], IPAddress ip, IPAddress gateway, IPAddress subnet);
+    void setEthernetStaticIP(IPAddress ip, IPAddress gateway, IPAddress subnet, IPAddress dns1, IPAddress dns2);
     void setLTEAPN(const String& apn, const String& user = "", const String& pass = "");
 
     NetInterface getCurrentInterface();

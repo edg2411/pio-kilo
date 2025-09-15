@@ -5,16 +5,16 @@
 #define BOARD_H
 
 // Ethernet SPI pins for W5500
-#define ETHERNET_SCK_PIN   14
-#define ETHERNET_MISO_PIN  12
-#define ETHERNET_MOSI_PIN  13
-#define ETHERNET_CS_PIN    15
+#define ETHERNET_SCK_PIN   25
+#define ETHERNET_MISO_PIN  23
+#define ETHERNET_MOSI_PIN  27
+#define ETHERNET_CS_PIN    18
 
 // Ethernet PHY configuration for W5500
 #define ETHERNET_PHY_TYPE       ETH_PHY_W5500
 #define ETHERNET_PHY_ADDR       1
-#define ETHERNET_PHY_IRQ        4
-#define ETHERNET_PHY_RST        5
+#define ETHERNET_PHY_IRQ        -1
+#define ETHERNET_PHY_RST        -1
 
 // LTE Serial configuration
 #define LTE_SERIAL_NUM      2

@@ -62,9 +62,23 @@ void setup() {
             ConfigLoader::getWiFiStaticDNS2()
         );
     }
-    byte mac[6];
-    ConfigLoader::getEthernetMAC(mac);
-    netManager->setEthernetConfig(mac, ConfigLoader::getEthernetIP(), ConfigLoader::getEthernetGateway(), ConfigLoader::getEthernetSubnet());
+    // Configure Ethernet static IP if enabled
+    if (ConfigLoader::getEthernetStaticIPEnabled()) {
+        Serial.println("Ethernet static IP enabled in config");
+        netManager->setEthernetStaticIP(
+            ConfigLoader::getEthernetStaticIP(),
+            ConfigLoader::getEthernetStaticGateway(),
+            ConfigLoader::getEthernetStaticSubnet(),
+            ConfigLoader::getEthernetStaticDNS1(),
+            ConfigLoader::getEthernetStaticDNS2()
+        );
+    } else {
+        // Use DHCP for Ethernet
+        Serial.println("Ethernet using DHCP");
+        byte mac[6];
+        ConfigLoader::getEthernetMAC(mac);
+        netManager->setEthernetConfig(mac, ConfigLoader::getEthernetIP(), ConfigLoader::getEthernetGateway(), ConfigLoader::getEthernetSubnet());
+    }
     netManager->setLTEAPN(ConfigLoader::getLTEAPN(), ConfigLoader::getLTEUser(), ConfigLoader::getLTEPass());
 
     netManager->setOnConnectedCallback(onConnected);

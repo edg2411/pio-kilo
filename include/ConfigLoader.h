@@ -22,6 +22,14 @@ public:
     static IPAddress getEthernetIP();
     static IPAddress getEthernetGateway();
     static IPAddress getEthernetSubnet();
+
+    static bool getEthernetStaticIPEnabled();
+    static IPAddress getEthernetStaticIP();
+    static IPAddress getEthernetStaticGateway();
+    static IPAddress getEthernetStaticSubnet();
+    static IPAddress getEthernetStaticDNS1();
+    static IPAddress getEthernetStaticDNS2();
+
     static String getLTEAPN();
     static String getLTEUser();
     static String getLTEPass();

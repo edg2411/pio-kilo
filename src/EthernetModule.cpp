@@ -1,12 +1,14 @@
 #include "EthernetModule.h"
 #include "board.h"
 
-EthernetModule::EthernetModule(int sck, int miso, int mosi, int cs, int addr, int irq, int rst) : connected(false), sck(sck), miso(miso), mosi(mosi), cs(cs), addr(addr), irq(irq), rst(rst) {
+EthernetModule::EthernetModule(int sck, int miso, int mosi, int cs, int addr, int irq, int rst) : connected(false), staticIPEnabled(false), sck(sck), miso(miso), mosi(mosi), cs(cs), addr(addr), irq(irq), rst(rst) {
     // Default MAC, can be set later
     mac[0] = 0xDE; mac[1] = 0xAD; mac[2] = 0xBE; mac[3] = 0xEF; mac[4] = 0xFE; mac[5] = 0xED;
     ip = IPAddress(192, 168, 1, 100);
     gateway = IPAddress(192, 168, 1, 1);
     subnet = IPAddress(255, 255, 255, 0);
+    dns1 = IPAddress(8, 8, 8, 8);
+    dns2 = IPAddress(8, 8, 4, 4);
 }
 
 void EthernetModule::setConfig(byte mac[6], IPAddress ip, IPAddress gateway, IPAddress subnet) {
@@ -16,11 +18,28 @@ void EthernetModule::setConfig(byte mac[6], IPAddress ip, IPAddress gateway, IPA
     this->subnet = subnet;
 }
 
+void EthernetModule::setStaticIP(IPAddress ip, IPAddress gateway, IPAddress subnet, IPAddress dns1, IPAddress dns2) {
+    this->ip = ip;
+    this->gateway = gateway;
+    this->subnet = subnet;
+    this->dns1 = dns1;
+    this->dns2 = dns2;
+}
+
+void EthernetModule::enableStaticIP(bool enabled) {
+    staticIPEnabled = enabled;
+}
+
 bool EthernetModule::connect() {
     if (connected) return true;
     SPI.begin(sck, miso, mosi, cs);
     ETH.begin(ETHERNET_PHY_TYPE, addr, cs, irq, rst, SPI);
-    ETH.config(ip, gateway, subnet);
+    if (staticIPEnabled) {
+        ETH.config(ip, gateway, subnet, dns1, dns2);
+    } else {
+        // Use DHCP
+        ETH.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE);
+    }
     // No delay, check linkUp in isConnected
     return false;
 }

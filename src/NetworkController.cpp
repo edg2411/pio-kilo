@@ -182,6 +182,11 @@ void NetworkController::setEthernetConfig(byte mac[6], IPAddress ip, IPAddress g
     ethernet->setConfig(mac, ip, gateway, subnet);
 }
 
+void NetworkController::setEthernetStaticIP(IPAddress ip, IPAddress gateway, IPAddress subnet, IPAddress dns1, IPAddress dns2) {
+    ethernet->setStaticIP(ip, gateway, subnet, dns1, dns2);
+    ethernet->enableStaticIP(true);
+}
+
 void NetworkController::setLTEAPN(const String& apn, const String& user, const String& pass) {
     if (lte) {
         lte->setAPN(apn, user, pass);

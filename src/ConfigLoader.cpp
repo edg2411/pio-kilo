@@ -55,18 +55,47 @@ void ConfigLoader::getEthernetMAC(byte mac[6]) {
 }
 
 IPAddress ConfigLoader::getEthernetIP() {
-    String ipStr = config["ethernet"]["ip"] | "192.168.1.100";
+    String ipStr = config["ethernet"]["staticIP"]["ip"] | "192.168.1.100";
     return IPAddress(ipStr.c_str());
 }
 
 IPAddress ConfigLoader::getEthernetGateway() {
-    String gwStr = config["ethernet"]["gateway"] | "192.168.1.1";
+    String gwStr = config["ethernet"]["staticIP"]["gateway"] | "192.168.1.1";
     return IPAddress(gwStr.c_str());
 }
 
 IPAddress ConfigLoader::getEthernetSubnet() {
-    String snStr = config["ethernet"]["subnet"] | "255.255.255.0";
+    String snStr = config["ethernet"]["staticIP"]["subnet"] | "255.255.255.0";
     return IPAddress(snStr.c_str());
+}
+
+bool ConfigLoader::getEthernetStaticIPEnabled() {
+    return config["ethernet"]["staticIP"]["enabled"] | false;
+}
+
+IPAddress ConfigLoader::getEthernetStaticIP() {
+    String ipStr = config["ethernet"]["staticIP"]["ip"] | "192.168.1.100";
+    return IPAddress(ipStr.c_str());
+}
+
+IPAddress ConfigLoader::getEthernetStaticGateway() {
+    String gwStr = config["ethernet"]["staticIP"]["gateway"] | "192.168.1.1";
+    return IPAddress(gwStr.c_str());
+}
+
+IPAddress ConfigLoader::getEthernetStaticSubnet() {
+    String snStr = config["ethernet"]["staticIP"]["subnet"] | "255.255.255.0";
+    return IPAddress(snStr.c_str());
+}
+
+IPAddress ConfigLoader::getEthernetStaticDNS1() {
+    String dns1Str = config["ethernet"]["staticIP"]["dns1"] | "8.8.8.8";
+    return IPAddress(dns1Str.c_str());
+}
+
+IPAddress ConfigLoader::getEthernetStaticDNS2() {
+    String dns2Str = config["ethernet"]["staticIP"]["dns2"] | "8.8.4.4";
+    return IPAddress(dns2Str.c_str());
 }
 
 String ConfigLoader::getLTEAPN() {
