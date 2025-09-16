@@ -29,6 +29,7 @@ public:
     static IPAddress getEthernetStaticSubnet();
     static IPAddress getEthernetStaticDNS1();
     static IPAddress getEthernetStaticDNS2();
+    static String getEthernetHostname();
 
     static String getLTEAPN();
     static String getLTEUser();

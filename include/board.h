@@ -25,4 +25,10 @@
 // LTE Modem type
 #define LTE_MODEM_TYPE      PPP_MODEM_SIM7600
 
+// Test board pins
+#define LED_PIN         14
+#define RELAY_PIN       15
+#define BUTTON_PIN      12
+#define BUZZER_PIN      21
+
 #endif // BOARD_H

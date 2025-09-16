@@ -217,3 +217,7 @@ String ConfigLoader::loadPrivateKey() {
     file.close();
     return key;
 }
+
+String ConfigLoader::getEthernetHostname() {
+    return config["ethernet"]["hostname"] | "esp32-device";
+}

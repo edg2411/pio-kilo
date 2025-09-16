@@ -35,7 +35,7 @@ private:
     EthernetModule* ethernet;
     LTEModule* lte;
 
-    std::vector<NetInterface> priorityOrder = {ETHERNET, WIFI, LTE};
+    std::vector<NetInterface> priorityOrder = {ETHERNET};
     int retryCount;
     const int maxRetries = 3;
     unsigned long lastRetryTime;
@@ -67,6 +67,7 @@ public:
 
     NetInterface getCurrentInterface();
     NetworkState getState();
+    IPAddress getIP();
 };
 
 #endif // NETWORK_CONTROLLER_H

@@ -1,5 +1,6 @@
 #include "EthernetModule.h"
 #include "board.h"
+#include "ConfigLoader.h"
 
 EthernetModule::EthernetModule(int sck, int miso, int mosi, int cs, int addr, int irq, int rst) : connected(false), staticIPEnabled(false), sck(sck), miso(miso), mosi(mosi), cs(cs), addr(addr), irq(irq), rst(rst) {
     // Default MAC, can be set later
@@ -34,12 +35,13 @@ bool EthernetModule::connect() {
     if (connected) return true;
     SPI.begin(sck, miso, mosi, cs);
     ETH.begin(ETHERNET_PHY_TYPE, addr, cs, irq, rst, SPI);
+    // Set hostname for mDNS
+    String hostname = ConfigLoader::getEthernetHostname();
+    ETH.setHostname(hostname.c_str());
     if (staticIPEnabled) {
         ETH.config(ip, gateway, subnet, dns1, dns2);
-    } else {
-        // Use DHCP
-        ETH.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE, INADDR_NONE);
     }
+    // For DHCP, don't call ETH.config - let it use DHCP automatically
     // No delay, check linkUp in isConnected
     return false;
 }

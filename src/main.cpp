@@ -1,10 +1,14 @@
 #include <Arduino.h>
+#include <WiFi.h>
 #include "NetworkController.h"
-#include "MQTTModule.h"
 #include "ConfigLoader.h"
+#include "board.h"
 
 NetworkController* netManager;
-MQTTModule* mqtt;
+WiFiServer server(80);
+bool relayState = false;
+unsigned long lastButtonPress = 0;
+const unsigned long debounceDelay = 200;
 
 void onConnected(NetInterface interface) {
     Serial.print("Connected via ");
@@ -28,40 +32,22 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
+    // Initialize pins
+    pinMode(LED_PIN, OUTPUT);
+    pinMode(RELAY_PIN, OUTPUT);
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    pinMode(BUZZER_PIN, OUTPUT);
+    digitalWrite(BUZZER_PIN, LOW); // Turn off buzzer
+    digitalWrite(LED_PIN, LOW);    // Initial LED off
+    digitalWrite(RELAY_PIN, LOW);  // Initial relay off
+
     // Load configuration from LittleFS
     if (!ConfigLoader::loadConfig()) {
         Serial.println("Failed to load config, using defaults");
     }
 
     netManager = new NetworkController();
-    mqtt = new MQTTModule(netManager);
 
-    // Set MQTT broker from config
-    mqtt->setBroker(ConfigLoader::getMQTTBroker(), ConfigLoader::getMQTTPort());
-    mqtt->setCredentials(ConfigLoader::getMQTTClientId(), ConfigLoader::getMQTTUsername(), ConfigLoader::getMQTTPassword());
-
-    // Set MQTT topics from config
-    mqtt->setTopics(
-        ConfigLoader::getMQTTStatusTopic(),
-        ConfigLoader::getMQTTCommandTopic(),
-        ConfigLoader::getMQTTSensorTopic(),
-        ConfigLoader::getMQTTHeartbeatTopic()
-    );
-
-    // Set network credentials from config
-    netManager->setWiFiCredentials(ConfigLoader::getWiFiSSID(), ConfigLoader::getWiFiPassword());
-
-    // Configure WiFi static IP if enabled
-    if (ConfigLoader::getWiFiStaticIPEnabled()) {
-        Serial.println("WiFi static IP enabled in config");
-        netManager->setWiFiStaticIP(
-            ConfigLoader::getWiFiStaticIP(),
-            ConfigLoader::getWiFiStaticGateway(),
-            ConfigLoader::getWiFiStaticSubnet(),
-            ConfigLoader::getWiFiStaticDNS1(),
-            ConfigLoader::getWiFiStaticDNS2()
-        );
-    }
     // Configure Ethernet static IP if enabled
     if (ConfigLoader::getEthernetStaticIPEnabled()) {
         Serial.println("Ethernet static IP enabled in config");
@@ -79,57 +65,70 @@ void setup() {
         ConfigLoader::getEthernetMAC(mac);
         netManager->setEthernetConfig(mac, ConfigLoader::getEthernetIP(), ConfigLoader::getEthernetGateway(), ConfigLoader::getEthernetSubnet());
     }
-    netManager->setLTEAPN(ConfigLoader::getLTEAPN(), ConfigLoader::getLTEUser(), ConfigLoader::getLTEPass());
 
     netManager->setOnConnectedCallback(onConnected);
     netManager->setOnDisconnectedCallback(onDisconnected);
 
     netManager->begin();
 
-    // Load certificates after network initialization
-    delay(100);  // Small delay to ensure network is ready
-    mqtt->loadCertsFromSPIFFS();
-
-    // Note: Subscription to command topic happens automatically when MQTT connects
+    // Start HTTP server
+    server.begin();
+    Serial.println("HTTP server started");
 }
 
 void loop() {
-    static unsigned long lastHeartbeat = 0;
-    static unsigned long lastSensorReading = 0;
-    static unsigned long lastStatusUpdate = 0;
-
     netManager->update();
-    mqtt->update();
 
-    // Send heartbeat every 30 seconds
-    if (millis() - lastHeartbeat > 30000) {
-        if (mqtt->publishHeartbeat()) {
-            Serial.println("Heartbeat sent");
+    // Handle HTTP clients
+    WiFiClient client = server.available();
+    if (client) {
+        Serial.println("New client connected");
+        String request = "";
+        while (client.connected()) {
+            if (client.available()) {
+                char c = client.read();
+                request += c;
+                if (c == '\n') break; // End of line
+            }
         }
-        lastHeartbeat = millis();
+        // Parse request
+        if (request.indexOf("GET /open") >= 0) {
+            relayState = true;
+            digitalWrite(RELAY_PIN, HIGH);
+            digitalWrite(LED_PIN, HIGH);
+            Serial.println("Relay opened");
+        } else if (request.indexOf("GET /close") >= 0) {
+            relayState = false;
+            digitalWrite(RELAY_PIN, LOW);
+            digitalWrite(LED_PIN, LOW);
+            Serial.println("Relay closed");
+        }
+        // Send response
+        client.println("HTTP/1.1 200 OK");
+        client.println("Content-Type: text/html");
+        client.println("Connection: close");
+        client.println();
+        client.println("<!DOCTYPE HTML>");
+        client.println("<html>");
+        client.println("<head><title>Relay Control</title></head>");
+        client.println("<body>");
+        client.println("<h1>Relay State: " + String(relayState ? "OPEN" : "CLOSE") + "</h1>");
+        client.println("<a href=\"/open\"><button>Open Relay</button></a>");
+        client.println("<a href=\"/close\"><button>Close Relay</button></a>");
+        client.println("</body>");
+        client.println("</html>");
+        client.stop();
+        Serial.println("Client disconnected");
     }
 
-    // Send sensor data every 10 seconds
-    if (millis() - lastSensorReading > 10000) {
-        String sensorData = "{\"temperature\":" + String(random(20, 30)) +
-                           ",\"humidity\":" + String(random(40, 80)) +
-                           ",\"timestamp\":" + String(millis()) + "}";
-        if (mqtt->publishSensor(sensorData)) {
-            Serial.println("Sensor data sent");
-        }
-        lastSensorReading = millis();
+    // Handle button press
+    if (digitalRead(BUTTON_PIN) == LOW && millis() - lastButtonPress > debounceDelay) {
+        relayState = !relayState;
+        digitalWrite(RELAY_PIN, relayState ? HIGH : LOW);
+        digitalWrite(LED_PIN, relayState ? HIGH : LOW);
+        Serial.println("Button pressed, relay toggled to " + String(relayState ? "OPEN" : "CLOSE"));
+        lastButtonPress = millis();
     }
 
-    // Send status update every 60 seconds
-    if (millis() - lastStatusUpdate > 60000) {
-        String statusMsg = "{\"uptime\":" + String(millis()/1000) +
-                          ",\"network\":\"" + (netManager->getState() == CONNECTED ? "connected" : "disconnected") + "\"" +
-                          ",\"mqtt\":\"" + (mqtt->isConnected() ? "connected" : "disconnected") + "\"}";
-        if (mqtt->publishStatus(statusMsg)) {
-            Serial.println("Status update sent");
-        }
-        lastStatusUpdate = millis();
-    }
-
-    delay(1000);
+    delay(100);
 }

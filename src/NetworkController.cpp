@@ -34,7 +34,6 @@ void NetworkController::begin() {
     // lteSerial->begin(LTE_SERIAL_BAUD, SERIAL_8N1, LTE_RX_PIN, LTE_TX_PIN);
     // lte = new LTEModule(lteSerial);
     lte = nullptr;  // Set to null to prevent crashes
-    Serial.println("LTE hardware initialization skipped");
 
     // Set default credentials (user should set via methods)
     // wifi->setCredentials("SSID", "PASS");
@@ -52,37 +51,8 @@ void NetworkController::update() {
         if (millis() - lastRetryTime > retryDelay) {
             triggerFailover();
         }
-    } else if (state == CONNECTED) {
-        // Check for higher priority interfaces that are available
-        size_t currentIndex = 0;
-        for (size_t i = 0; i < priorityOrder.size(); i++) {
-            if (priorityOrder[i] == currentInterface) {
-                currentIndex = i;
-                break;
-            }
-        }
-        for (size_t i = 0; i < currentIndex; i++) {
-            NetInterface higher = priorityOrder[i];
-            bool isHigherConnected = false;
-            switch (higher) {
-                case ETHERNET:
-                    isHigherConnected = ethernet->isConnected();
-                    break;
-                case WIFI:
-                    isHigherConnected = wifi->isConnected();
-                    break;
-                case LTE:
-                    isHigherConnected = lte && lte->isConnected();
-                    break;
-            }
-            if (isHigherConnected) {
-                // Switch to higher priority interface
-                currentInterface = higher;
-                if (onConnectedCallback) onConnectedCallback(higher);
-                break; // Switch to the highest available
-            }
-        }
     }
+    // No need to check for higher priority since only Ethernet is used
 }
 
 void NetworkController::setOnConnectedCallback(NetworkEventCallback cb) {
@@ -101,6 +71,13 @@ NetworkState NetworkController::getState() {
     return state;
 }
 
+IPAddress NetworkController::getIP() {
+    if (currentInterface == ETHERNET && ethernet) {
+        return ethernet->getIP();
+    }
+    return IPAddress(0, 0, 0, 0);
+}
+
 void NetworkController::attemptConnection(NetInterface interface) {
     state = CONNECTING;
     bool success = false;
@@ -109,11 +86,9 @@ void NetworkController::attemptConnection(NetInterface interface) {
         case ETHERNET:
             success = ethernet->connect();
             break;
-        case WIFI:
-            success = wifi->connect();
-            break;
-        case LTE:
-            success = lte && lte->connect();
+        default:
+            // Only Ethernet is supported
+            success = false;
             break;
     }
 
@@ -133,11 +108,9 @@ void NetworkController::checkConnection() {
         case ETHERNET:
             isConnected = ethernet->isConnected();
             break;
-        case WIFI:
-            isConnected = wifi->isConnected();
-            break;
-        case LTE:
-            isConnected = lte && lte->isConnected();
+        default:
+            // Only Ethernet is supported
+            isConnected = false;
             break;
     }
 
@@ -203,6 +176,14 @@ void NetworkController::networkEventHandler(arduino_event_id_t event, arduino_ev
             instance->state = CONNECTED;
             instance->currentInterface = ETHERNET;
             if (instance->onConnectedCallback) instance->onConnectedCallback(ETHERNET);
+            break;
+        case ARDUINO_EVENT_ETH_GOT_IP:
+            Serial.println("Ethernet IP assigned: " + ETH.localIP().toString());
+            byte mac[6];
+            ETH.macAddress(mac);
+            char macStr[18];
+            sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+            Serial.println("Ethernet MAC: " + String(macStr));
             break;
         case ARDUINO_EVENT_ETH_DISCONNECTED:
             instance->state = DISCONNECTED;
