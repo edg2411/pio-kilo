@@ -7,8 +7,19 @@
 
 NetworkController* netManager;
 WebServerModule* webServer;
-unsigned long lastButtonPress = 0;
+
+// Button interrupt handling
+volatile bool buttonPressed = false;
+volatile unsigned long lastButtonPress = 0;
 const unsigned long debounceDelay = 200;
+
+// Button interrupt service routine
+void IRAM_ATTR buttonISR() {
+    if (millis() - lastButtonPress > debounceDelay) {
+        buttonPressed = true;
+        lastButtonPress = millis();
+    }
+}
 
 void onConnected(NetInterface interface) {
     Serial.print("Connected via ");
@@ -35,11 +46,17 @@ void setup() {
     // Initialize pins
     pinMode(LED_PIN, OUTPUT);
     pinMode(RELAY_PIN, OUTPUT);
-    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    pinMode(BUTTON_PIN, INPUT_PULLUP);  // Button needs pullup for interrupt
     pinMode(BUZZER_PIN, OUTPUT);
     digitalWrite(BUZZER_PIN, LOW); // Turn off buzzer
     digitalWrite(LED_PIN, LOW);    // Initial LED off
     digitalWrite(RELAY_PIN, LOW);  // Initial relay off
+
+    // Setup button interrupt (detach first to avoid duplicate ISR error)
+    detachInterrupt(digitalPinToInterrupt(BUTTON_PIN));
+    attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
+
+    Serial.println("Button interrupt configured on pin " + String(BUTTON_PIN));
 
     // Load configuration from LittleFS
     if (!ConfigLoader::loadConfig()) {
@@ -79,18 +96,22 @@ void setup() {
 void loop() {
     netManager->update();
 
-    // Handle web server clients
-    webServer->handleClient();
+    // Handle web server clients (with timeout to prevent blocking)
+    static unsigned long lastWebCheck = 0;
+    if (millis() - lastWebCheck > 1) {  // Check every 1ms
+        webServer->handleClient();
+        lastWebCheck = millis();
+    }
 
-    // Handle button press
-    if (digitalRead(BUTTON_PIN) == LOW && millis() - lastButtonPress > debounceDelay) {
+    // Handle button press (interrupt-based)
+    if (buttonPressed) {
+        buttonPressed = false;  // Reset flag
         bool newState = !webServer->getRelayState();
         webServer->setRelayState(newState);
         digitalWrite(RELAY_PIN, newState ? HIGH : LOW);
         digitalWrite(LED_PIN, newState ? HIGH : LOW);
         Serial.println("Button pressed, door toggled to " + String(newState ? "OPEN" : "CLOSED"));
-        lastButtonPress = millis();
     }
 
-    delay(10);
+    delay(1);  // Very short delay
 }

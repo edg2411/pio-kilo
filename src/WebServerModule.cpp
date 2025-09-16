@@ -19,59 +19,97 @@ void WebServerModule::handleClient() {
     WiFiClient client = server->available();
     if (client) {
         String request = "";
-        String currentLine = "";
-        bool headersComplete = false;
-        int contentLength = 0;
+        bool requestComplete = false;
+        unsigned long startTime = millis();
 
-        // Read headers
-        while (client.connected() && !headersComplete) {
+        // Read the entire request with timeout
+        while (client.connected() && !requestComplete && millis() - startTime < 1000) {
             if (client.available()) {
                 char c = client.read();
                 request += c;
 
-                if (c == '\n') {
-                    if (currentLine.length() == 0) {
-                        // End of headers
-                        headersComplete = true;
-                    } else {
-                        // Check for Content-Length header
-                        if (currentLine.startsWith("Content-Length: ")) {
-                            contentLength = currentLine.substring(16).toInt();
-                        }
-                        currentLine = "";
-                    }
-                } else if (c != '\r') {
-                    currentLine += c;
+                // Check for end of HTTP request (double newline)
+                if (request.endsWith("\r\n\r\n")) {
+                    requestComplete = true;
                 }
             }
         }
 
-        // Read POST body if present
-        if (contentLength > 0) {
-            String body = "";
-            int bytesRead = 0;
-            while (client.connected() && bytesRead < contentLength) {
-                if (client.available()) {
-                    char c = client.read();
-                    body += c;
-                    bytesRead++;
+        // Debug: Print the request
+        Serial.println("=== REQUEST RECEIVED ===");
+        Serial.println(request);
+        Serial.println("=== END REQUEST ===");
+
+        // Filter out completely empty requests (browser keep-alive, etc.)
+        if (request.length() == 0) {
+            // Silently ignore empty requests
+            client.stop();
+            return;
+        }
+
+        // Filter out invalid requests (too short or wrong format)
+        if (request.length() < 20 || !request.startsWith("GET ") && !request.startsWith("POST ")) {
+            Serial.println("=== INVALID REQUEST DETECTED ===");
+            Serial.println("Length: " + String(request.length()));
+            Serial.println("Starts with GET: " + String(request.startsWith("GET ")));
+            Serial.println("Starts with POST: " + String(request.startsWith("POST ")));
+            Serial.println("Raw request: '" + request + "'");
+            Serial.println("=== END INVALID REQUEST ===");
+
+            client.println("HTTP/1.1 400 Bad Request");
+            client.println("Connection: close");
+            client.println();
+            client.stop();
+            return;
+        }
+
+        // Check if this is a POST request that needs body data
+        if (request.indexOf("POST /login") >= 0 || request.indexOf("POST /control") >= 0) {
+            // Extract Content-Length from headers
+            int contentLength = 0;
+            int clIndex = request.indexOf("Content-Length: ");
+            if (clIndex >= 0) {
+                int clEnd = request.indexOf("\r\n", clIndex);
+                if (clEnd > clIndex) {
+                    String clStr = request.substring(clIndex + 16, clEnd);
+                    contentLength = clStr.toInt();
                 }
             }
-            request += body;
+
+            // Read POST body if present
+            if (contentLength > 0 && millis() - startTime < 1500) {
+                String body = "";
+                int bytesRead = 0;
+                while (client.connected() && bytesRead < contentLength && millis() - startTime < 1500) {
+                    if (client.available()) {
+                        char c = client.read();
+                        body += c;
+                        bytesRead++;
+                    }
+                }
+                request += body;
+                Serial.println("POST Body: " + body);
+            }
         }
 
         // Parse request
         if (request.indexOf("GET / ") >= 0 || request.indexOf("GET /login") >= 0) {
+            Serial.println("Handling root/login request");
             handleRoot(client, request);
         } else if (request.indexOf("POST /login") >= 0) {
+            Serial.println("Handling login POST request");
             handleLogin(client, request);
         } else if (request.indexOf("GET /control") >= 0) {
+            Serial.println("Handling control GET request");
             handleControl(client, request);
         } else if (request.indexOf("POST /control") >= 0) {
+            Serial.println("Handling control POST request");
             handleControl(client, request);
         } else if (request.indexOf("GET /logout") >= 0) {
+            Serial.println("Handling logout request");
             handleLogout(client);
         } else if (request.indexOf("GET /open") >= 0) {
+            Serial.println("Handling open request");
             // Direct relay control (for backward compatibility)
             setRelayState(true);
             client.println("HTTP/1.1 302 Found");
@@ -79,6 +117,7 @@ void WebServerModule::handleClient() {
             client.println("Connection: close");
             client.println();
         } else if (request.indexOf("GET /close") >= 0) {
+            Serial.println("Handling close request");
             // Direct relay control (for backward compatibility)
             setRelayState(false);
             client.println("HTTP/1.1 302 Found");
@@ -86,7 +125,7 @@ void WebServerModule::handleClient() {
             client.println("Connection: close");
             client.println();
         } else {
-            // 404
+            Serial.println("404 - Request not recognized");
             client.println("HTTP/1.1 404 Not Found");
             client.println("Content-Type: text/html");
             client.println("Connection: close");
@@ -94,7 +133,6 @@ void WebServerModule::handleClient() {
             client.println("<h1>404 Not Found</h1>");
         }
 
-        delay(10);
         client.stop();
     }
 }
@@ -142,24 +180,41 @@ void WebServerModule::handleLogin(WiFiClient& client, String request) {
 }
 
 void WebServerModule::handleControl(WiFiClient& client, String request) {
+    Serial.println("=== CONTROL REQUEST ===");
+    Serial.println("Session token: " + sessionToken);
+
     // Check authentication - handle both GET and POST
     bool isAuthenticated = false;
 
     if (request.indexOf("GET /control") >= 0) {
         // For GET requests, check URL parameters
-        isAuthenticated = (request.indexOf("session=" + sessionToken) >= 0 && validateSession(sessionToken));
+        String sessionParam = "";
+        int sessionIndex = request.indexOf("session=");
+        if (sessionIndex >= 0) {
+            int sessionEnd = request.indexOf(" ", sessionIndex);
+            if (sessionEnd < 0) sessionEnd = request.indexOf("\r\n", sessionIndex);
+            if (sessionEnd > sessionIndex) {
+                sessionParam = request.substring(sessionIndex + 8, sessionEnd);
+            }
+        }
+        Serial.println("GET session param: '" + sessionParam + "'");
+        isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
     } else if (request.indexOf("POST /control") >= 0) {
         // For POST requests, check form data
         int bodyStart = request.indexOf("\r\n\r\n");
         if (bodyStart > 0) {
             String body = request.substring(bodyStart + 4);
+            Serial.println("POST body: " + body);
             if (body.indexOf("session=" + sessionToken) >= 0 && validateSession(sessionToken)) {
                 isAuthenticated = true;
             }
         }
     }
 
+    Serial.println("Authentication result: " + String(isAuthenticated ? "SUCCESS" : "FAILED"));
+
     if (!isAuthenticated) {
+        Serial.println("Redirecting to login");
         client.println("HTTP/1.1 302 Found");
         client.println("Location: /");
         client.println("Connection: close");
@@ -170,13 +225,16 @@ void WebServerModule::handleControl(WiFiClient& client, String request) {
     // Handle POST requests for relay control
     if (request.indexOf("POST /control") >= 0) {
         if (request.indexOf("action=open") >= 0) {
+            Serial.println("Opening door");
             setRelayState(true);
         } else if (request.indexOf("action=close") >= 0) {
+            Serial.println("Closing door");
             setRelayState(false);
         }
     }
 
     // Show control page
+    Serial.println("Serving control page");
     client.println("HTTP/1.1 200 OK");
     client.println("Content-Type: text/html");
     client.println("Connection: close");
@@ -253,7 +311,6 @@ String WebServerModule::getHeader() {
     String html = "<!DOCTYPE html><html><head>";
     html += "<title>ESP32 Door Control</title>";
     html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
-    html += "<meta http-equiv='refresh' content='5'>";  // Auto-refresh every 5 seconds
     html += "<style>";
     html += "body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#f5f5f5;}";
     html += ".login-container,.control-container{max-width:400px;margin:50px auto;padding:30px;background:white;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}";
