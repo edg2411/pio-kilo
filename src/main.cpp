@@ -3,10 +3,10 @@
 #include "NetworkController.h"
 #include "ConfigLoader.h"
 #include "board.h"
+#include "WebServerModule.h"
 
 NetworkController* netManager;
-WiFiServer server(80);
-bool relayState = false;
+WebServerModule* webServer;
 unsigned long lastButtonPress = 0;
 const unsigned long debounceDelay = 200;
 
@@ -71,64 +71,26 @@ void setup() {
 
     netManager->begin();
 
-    // Start HTTP server
-    server.begin();
-    Serial.println("HTTP server started");
+    // Start web server
+    webServer = new WebServerModule(80, RELAY_PIN, LED_PIN);
+    webServer->begin();
 }
 
 void loop() {
     netManager->update();
 
-    // Handle HTTP clients
-    WiFiClient client = server.available();
-    if (client) {
-        Serial.println("New client connected");
-        String request = "";
-        while (client.connected()) {
-            if (client.available()) {
-                char c = client.read();
-                request += c;
-                if (c == '\n') break; // End of line
-            }
-        }
-        // Parse request
-        if (request.indexOf("GET /open") >= 0) {
-            relayState = true;
-            digitalWrite(RELAY_PIN, HIGH);
-            digitalWrite(LED_PIN, HIGH);
-            Serial.println("Relay opened");
-        } else if (request.indexOf("GET /close") >= 0) {
-            relayState = false;
-            digitalWrite(RELAY_PIN, LOW);
-            digitalWrite(LED_PIN, LOW);
-            Serial.println("Relay closed");
-        }
-        // Send response
-        client.println("HTTP/1.1 200 OK");
-        client.println("Content-Type: text/html");
-        client.println("Connection: close");
-        client.println();
-        client.println("<!DOCTYPE HTML>");
-        client.println("<html>");
-        client.println("<head><title>Relay Control</title></head>");
-        client.println("<body>");
-        client.println("<h1>Relay State: " + String(relayState ? "OPEN" : "CLOSE") + "</h1>");
-        client.println("<a href=\"/open\"><button>Open Relay</button></a>");
-        client.println("<a href=\"/close\"><button>Close Relay</button></a>");
-        client.println("</body>");
-        client.println("</html>");
-        client.stop();
-        Serial.println("Client disconnected");
-    }
+    // Handle web server clients
+    webServer->handleClient();
 
     // Handle button press
     if (digitalRead(BUTTON_PIN) == LOW && millis() - lastButtonPress > debounceDelay) {
-        relayState = !relayState;
-        digitalWrite(RELAY_PIN, relayState ? HIGH : LOW);
-        digitalWrite(LED_PIN, relayState ? HIGH : LOW);
-        Serial.println("Button pressed, relay toggled to " + String(relayState ? "OPEN" : "CLOSE"));
+        bool newState = !webServer->getRelayState();
+        webServer->setRelayState(newState);
+        digitalWrite(RELAY_PIN, newState ? HIGH : LOW);
+        digitalWrite(LED_PIN, newState ? HIGH : LOW);
+        Serial.println("Button pressed, door toggled to " + String(newState ? "OPEN" : "CLOSED"));
         lastButtonPress = millis();
     }
 
-    delay(100);
+    delay(10);
 }
