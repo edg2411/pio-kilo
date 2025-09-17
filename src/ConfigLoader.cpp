@@ -219,5 +219,5 @@ String ConfigLoader::loadPrivateKey() {
 }
 
 String ConfigLoader::getEthernetHostname() {
-    return config["ethernet"]["hostname"] | "esp32-device";
+    return config["ethernet"]["hostname"] | "2gt-device";
 }

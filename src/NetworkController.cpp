@@ -3,6 +3,7 @@
 #include "EthernetModule.h"
 #include "LTEModule.h"
 #include "board.h"
+#include "ConfigLoader.h"
 #include <ESPmDNS.h>
 
 NetworkController* NetworkController::instance = nullptr;
@@ -200,6 +201,7 @@ void NetworkController::networkEventHandler(arduino_event_id_t event, arduino_ev
             if (instance->onConnectedCallback) instance->onConnectedCallback(ETHERNET);
             break;
         case ARDUINO_EVENT_ETH_GOT_IP:
+        {
             Serial.println("Ethernet IP assigned: " + ETH.localIP().toString());
             byte mac[6];
             ETH.macAddress(mac);
@@ -207,8 +209,10 @@ void NetworkController::networkEventHandler(arduino_event_id_t event, arduino_ev
             sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
             Serial.println("Ethernet MAC: " + String(macStr));
             // Setup mDNS
-            setupMDNS("esp32-relay");
+            String hostname = ConfigLoader::getEthernetHostname();
+            setupMDNS(hostname.c_str());
             break;
+        }
         case ARDUINO_EVENT_ETH_DISCONNECTED:
             instance->state = DISCONNECTED;
             if (instance->onDisconnectedCallback) instance->onDisconnectedCallback(ETHERNET);

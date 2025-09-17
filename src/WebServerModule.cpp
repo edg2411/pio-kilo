@@ -46,11 +46,7 @@ void WebServerModule::begin() {
 
     // WebSocket setup
     ws->onEvent([this](AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
-        if(type == WS_EVT_CONNECT){
-            Serial.println("WebSocket client connected");
-        } else if(type == WS_EVT_DISCONNECT){
-            Serial.println("WebSocket client disconnected");
-        }
+        // WebSocket event handling - no logging to reduce noise
     });
     server->addHandler(ws);
 
@@ -162,14 +158,14 @@ String WebServerModule::getLoginPage(bool error) {
     
     html += "<form method='POST' action='/login'>";
     html += "<div class='form-group'>";
-    html += "<label for='username'>Username:</label>";
+    html += "<label for='username'>Usuario:</label>";
     html += "<input type='text' id='username' name='username' required>";
     html += "</div>";
     html += "<div class='form-group'>";
     html += "<label for='password'>Password:</label>";
     html += "<input type='password' id='password' name='password' required>";
     html += "</div>";
-    html += "<button type='submit' class='btn btn-primary'>Login</button>";
+    html += "<button type='submit' class='btn btn-primary'>Ingresar</button>";
     html += "</form>";
     html += "</div>";
     html += getFooter();
@@ -179,12 +175,9 @@ String WebServerModule::getLoginPage(bool error) {
 String WebServerModule::getControlPage() {
     // CRITICAL: Only read hardware state - NEVER write to it
     bool actualHardwareState = digitalRead(relayPin);
-    Serial.println("[PAGE LOAD] Hardware read: PIN" + String(relayPin) + "=" + String(actualHardwareState ? "HIGH" : "LOW") +
-                  ", Previous internal state: " + String(relayState ? "OPEN" : "CLOSED"));
 
     // Update internal state to match hardware for UI display
     relayState = actualHardwareState;
-    Serial.println("[PAGE LOAD] Updated UI to show: " + String(relayState ? "OPEN" : "CLOSED"));
 
     String html = getHeader();
     html += "<div class='control-container'>";
@@ -213,7 +206,7 @@ String WebServerModule::getControlPage() {
     html += "</div>";
 
     html += "<div class='logout'>";
-    html += "<a href='/logout' class='btn btn-secondary'>Logout</a>";
+    html += "<a href='/logout' class='btn btn-secondary'>Salir</a>";
     html += "</div>";
     html += "</div>";
 
@@ -354,8 +347,6 @@ void WebServerModule::setRelayState(bool state) {
     relayState = state;
     digitalWrite(relayPin, state ? HIGH : LOW);
     digitalWrite(ledPin, state ? HIGH : LOW);
-    // Minimal logging
-    Serial.println("Relay: " + String(state ? "ON" : "OFF"));
     // Log the action
     String action = state ? "ABRIR" : "CERRAR";
     addLog(action);

@@ -103,9 +103,6 @@ void loop() {
 
         // Send WebSocket event instead of controlling relay directly
         webServer->sendButtonEvent();
-
-        // Reduced logging to prevent buffer overflow
-        Serial.println("Button pressed, sent WebSocket event");
     }
 
     delay(1);  // Very short delay
