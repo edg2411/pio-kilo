@@ -167,13 +167,37 @@ void WebServerModule::handleLogout(AsyncWebServerRequest *request) {
 }
 
 void WebServerModule::handleOpen(AsyncWebServerRequest *request) {
+    // Check authentication
+    bool isAuthenticated = false;
+    if (request->hasParam("session")) {
+        String sessionParam = request->getParam("session")->value();
+        isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
+    }
+
+    if (!isAuthenticated) {
+        request->redirect("/");
+        return;
+    }
+
     setRelayState(true);
-    request->redirect("/control");
+    request->redirect("/control?session=" + sessionToken);
 }
 
 void WebServerModule::handleClose(AsyncWebServerRequest *request) {
+    // Check authentication
+    bool isAuthenticated = false;
+    if (request->hasParam("session")) {
+        String sessionParam = request->getParam("session")->value();
+        isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
+    }
+
+    if (!isAuthenticated) {
+        request->redirect("/");
+        return;
+    }
+
     setRelayState(false);
-    request->redirect("/control");
+    request->redirect("/control?session=" + sessionToken);
 }
 
 String WebServerModule::getLoginPage(bool error) {
