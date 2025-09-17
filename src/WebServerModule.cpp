@@ -234,6 +234,36 @@ void WebServerModule::handleConfigUpdate(AsyncWebServerRequest *request) {
         // Delay to allow response to be sent, then reboot
         delay(1000);
         ESP.restart();
+    } else if (section == "datetime") {
+        // Handle manual date/time configuration
+        String dateStr = request->getParam("date", true)->value();
+        String timeStr = request->getParam("time", true)->value();
+
+        if (dateStr.length() > 0 && timeStr.length() > 0) {
+            // Parse date and time
+            int year = dateStr.substring(0, 4).toInt();
+            int month = dateStr.substring(5, 7).toInt();
+            int day = dateStr.substring(8, 10).toInt();
+            int hour = timeStr.substring(0, 2).toInt();
+            int minute = timeStr.substring(3, 5).toInt();
+
+            // Set manual time
+            struct tm tm;
+            tm.tm_year = year - 1900;
+            tm.tm_mon = month - 1;
+            tm.tm_mday = day;
+            tm.tm_hour = hour;
+            tm.tm_min = minute;
+            tm.tm_sec = 0;
+
+            time_t t = mktime(&tm);
+            struct timeval tv = {t, 0};
+            settimeofday(&tv, NULL);
+
+            Serial.printf("Manual time set: %04d-%02d-%02d %02d:%02d\n", year, month, day, hour, minute);
+        }
+
+        request->redirect("/config?session=" + sessionToken + "&success=true");
     } else {
         request->redirect("/config?session=" + sessionToken);
     }
@@ -294,7 +324,7 @@ String WebServerModule::getLoginPage(bool error) {
     html += "<input type='text' id='username' name='username' required>";
     html += "</div>";
     html += "<div class='form-group'>";
-    html += "<label for='password'>Password:</label>";
+    html += "<label for='password'>Clave:</label>";
     html += "<input type='password' id='password' name='password' required>";
     html += "</div>";
     html += "<button type='submit' class='btn btn-primary'>Ingresar</button>";
@@ -314,22 +344,22 @@ String WebServerModule::getControlPage() {
     String html = getHeader();
     html += "<div class='control-container'>";
     html += "<h1>Control de acceso</h1>";
+    html += "<h2>Sucursal 001</h2>";
     html += "<div class='status'>";
     html += "<h2>Estado: <span class='" + String(relayState ? "status-open" : "status-closed") + "'>" + String(relayState ? "ABIERTO" : "CERRADO") + "</span></h2>";
-    html += "<p class='ip-info'>IP: " + ETH.localIP().toString() + "</p>";
     html += "</div>";
     
     html += "<div class='controls'>";
     html += "<form method='POST' action='/control' style='display: inline;'>";
     html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
     html += "<input type='hidden' name='action' value='open'>";
-    html += "<button type='submit' class='btn btn-success'>Abrir</button>";
+    html += "<button type='submit' class='btn btn-success'>ABRIR</button>";
     html += "</form>";
 
     html += "<form method='POST' action='/control' style='display: inline; margin-left: 20px;'>";
     html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
     html += "<input type='hidden' name='action' value='close'>";
-    html += "<button type='submit' class='btn btn-danger'>Cerrar</button>";
+    html += "<button type='submit' class='btn btn-danger'>CERRAR</button>";
     html += "</form>";
     html += "</div>";
 
@@ -340,7 +370,7 @@ String WebServerModule::getControlPage() {
 
     html += "<div class='navigation'>";
     html += "<a href='/logs?session=" + sessionToken + "' class='btn btn-info'>Ver Historial Completo</a>";
-    html += "<a href='/config?session=" + sessionToken + "' class='btn btn-warning' style='margin-left: 10px;'>Configuracion</a>";
+    html += "<a href='/config?session=" + sessionToken + "' class='btn btn-warning' style='margin-left: 10px;'>Ajuste</a>";
     html += "</div>";
 
     html += "<div class='logout'>";
@@ -393,6 +423,7 @@ String WebServerModule::getLogsPage() {
     String html = getHeader();
     html += "<div class='logs-container'>";
     html += "<h1>Historial Completo</h1>";
+    html += "<h2>Sucursal 001</h2>";
 
     // Navigation
     html += "<div class='navigation'>";
@@ -417,7 +448,7 @@ String WebServerModule::getLogsPage() {
 
     // Logs table
     html += "<div class='logs-section'>";
-    html += "<h2>Historial de Acciones</h2>";
+    html += "<h2>Historial de Comandoes</h2>";
     html += getAllLogsHTML();
     html += "</div>";
 
@@ -427,13 +458,13 @@ String WebServerModule::getLogsPage() {
 }
 
 String WebServerModule::getLogsHTML() {
-    String html = "<table id='logTable'><thead><tr><th>Fecha y Hora</th><th>Accion</th></tr></thead><tbody>";
+    String html = "<table id='logTable'><thead><tr><th>Fecha y Hora</th><th>Sucursal</th><th>Comando</th></tr></thead><tbody>";
 
     // Show last 10 logs on control page (most recent first)
     size_t startIndex = (logs.size() > 10) ? (logs.size() - 10) : 0;
 
     for (size_t i = logs.size(); i > startIndex; --i) {
-        html += "<tr><td>" + logs[i-1].timestamp + "</td><td>" + logs[i-1].action + "</td></tr>";
+        html += "<tr><td>" + logs[i-1].timestamp + "</td><td>001</td><td>" + logs[i-1].action + "</td></tr>";
     }
 
     html += "</tbody></table>";
@@ -441,9 +472,9 @@ String WebServerModule::getLogsHTML() {
 }
 
 String WebServerModule::getAllLogsHTML() {
-    String html = "<table><thead><tr><th>Fecha y Hora</th><th>Accion</th></tr></thead><tbody>";
+    String html = "<table><thead><tr><th>Fecha y Hora</th><th>Sucursal</th><th>Comando</th></tr></thead><tbody>";
     for (const auto& log : logs) {
-        html += "<tr><td>" + log.timestamp + "</td><td>" + log.action + "</td></tr>";
+        html += "<tr><td>" + log.timestamp + "</td><td>001</td><td>" + log.action + "</td></tr>";
     }
     html += "</tbody></table>";
     return html;
@@ -452,7 +483,7 @@ String WebServerModule::getAllLogsHTML() {
 String WebServerModule::getConfigPage() {
     String html = getHeader();
     html += "<div class='config-container'>";
-    html += "<h1>Configuracion del Sistema</h1>";
+    html += "<h1>Ajuste del Sistema</h1>";
 
     // Navigation
     html += "<div class='navigation'>";
@@ -467,7 +498,7 @@ String WebServerModule::getConfigPage() {
 
     // Network Settings
     html += "<div class='config-section'>";
-    html += "<h3>Configuracion de Red</h3>";
+    html += "<h3>Ajuste de Red</h3>";
     html += "<p class='warning'>Los cambios de red requieren reinicio</p>";
     html += "<form method='POST' action='/config'>";
     html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
@@ -484,6 +515,19 @@ String WebServerModule::getConfigPage() {
     html += "</form>";
     html += "</div>";
 
+    // Date/Time Configuration
+    html += "<div class='config-section'>";
+    html += "<h3>Ajuste de Fecha y Hora</h3>";
+    html += "<p class='warning'>Ajuste manual cuando no hay acceso a internet</p>";
+    html += "<form method='POST' action='/config'>";
+    html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
+    html += "<input type='hidden' name='section' value='datetime'>";
+    html += "<input type='date' name='date' style='margin: 5px;'><br>";
+    html += "<input type='time' name='time' style='margin: 5px;'><br>";
+    html += "<button type='submit' class='btn btn-success' style='margin-top: 10px;'>Actualizar Fecha/Hora</button>";
+    html += "</form>";
+    html += "</div>";
+
     // User Credentials
     html += "<div class='config-section'>";
     html += "<h3>Credenciales de Usuario</h3>";
@@ -491,8 +535,8 @@ String WebServerModule::getConfigPage() {
     html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
     html += "<input type='hidden' name='section' value='credentials'>";
     html += "<input type='text' name='username' placeholder='Usuario' value='" + USERNAME + "' required style='margin: 5px;'><br>";
-    html += "<input type='password' name='password' placeholder='Nueva password' required style='margin: 5px;'><br>";
-    html += "<input type='password' name='confirm_password' placeholder='Confirmar password' required style='margin: 5px;'><br>";
+    html += "<input type='password' name='password' placeholder='Nueva clave' required style='margin: 5px;'><br>";
+    html += "<input type='password' name='confirm_password' placeholder='Confirmar clave' required style='margin: 5px;'><br>";
     html += "<button type='submit' class='btn btn-success' style='margin-top: 10px;'>Actualizar Credenciales</button>";
     html += "</form>";
     html += "</div>";
