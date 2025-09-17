@@ -56,6 +56,10 @@ void WebServerModule::begin() {
 
     server->begin();
     Serial.println("Async web server started");
+
+    // Setup NTP with Argentina timezone
+    configTzTime("ART3", "pool.ntp.org");
+    Serial.println("NTP configured");
 }
 
 
@@ -202,7 +206,12 @@ String WebServerModule::getControlPage() {
     html += "<button type='submit' class='btn btn-danger'>Close Door</button>";
     html += "</form>";
     html += "</div>";
-    
+
+    html += "<div class='logs'>";
+    html += "<h2>Log History</h2>";
+    html += getLogsHTML();
+    html += "</div>";
+
     html += "<div class='logout'>";
     html += "<a href='/logout' class='btn btn-secondary'>Logout</a>";
     html += "</div>";
@@ -230,12 +239,31 @@ String WebServerModule::getControlPage() {
     html += "        form.appendChild(actionInput);";
     html += "        document.body.appendChild(form);";
     html += "        form.submit();";
+    html += "    } else if (event.data.startsWith('log:')) {";
+    html += "        var parts = event.data.substring(4).split(',');";
+    html += "        var timestamp = parts[0];";
+    html += "        var action = parts[1];";
+    html += "        var table = document.getElementById('logTable').getElementsByTagName('tbody')[0];";
+    html += "        var row = table.insertRow(0);";
+    html += "        var cell1 = row.insertCell(0);";
+    html += "        var cell2 = row.insertCell(1);";
+    html += "        cell1.innerHTML = timestamp;";
+    html += "        cell2.innerHTML = action;";
     html += "    }";
     html += "};";
     html += "ws.onclose = function() { console.log('WebSocket disconnected'); };";
     html += "</script>";
 
     html += getFooter();
+    return html;
+}
+
+String WebServerModule::getLogsHTML() {
+    String html = "<table id='logTable'><thead><tr><th>Timestamp</th><th>Action</th></tr></thead><tbody>";
+    for (auto it = logs.rbegin(); it != logs.rend(); ++it) {
+        html += "<tr><td>" + it->timestamp + "</td><td>" + it->action + "</td></tr>";
+    }
+    html += "</tbody></table>";
     return html;
 }
 
@@ -262,6 +290,10 @@ String WebServerModule::getHeader() {
     html += ".controls{text-align:center;margin:30px 0;}";
     html += ".logout{text-align:center;margin-top:30px;}";
     html += ".error{color:#dc3545;background:#f8d7da;padding:10px;border-radius:5px;margin-bottom:20px;text-align:center;}";
+    html += ".logs{margin-top:30px;}";
+    html += "table{width:100%;border-collapse:collapse;}";
+    html += "th,td{border:1px solid #ddd;padding:8px;text-align:left;}";
+    html += "th{background-color:#f2f2f2;}";
     html += "</style></head><body>";
     return html;
 }
@@ -288,6 +320,32 @@ bool WebServerModule::validateSession(String token) {
 
 
 
+String WebServerModule::getCurrentTime() {
+    time_t now = time(nullptr);
+    struct tm ti;
+    if (!localtime_r(&now, &ti)) {
+        return "Time not available";
+    }
+    char buf[32];
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &ti);
+    return String(buf);
+}
+
+void WebServerModule::addLog(String action) {
+    String timestamp = getCurrentTime();
+    LogEntry log = {timestamp, action};
+    logs.push_back(log);
+    if (logs.size() > 100) {
+        logs.erase(logs.begin());
+    }
+    sendLogToClients(log);
+}
+
+void WebServerModule::sendLogToClients(LogEntry log) {
+    String message = "log:" + log.timestamp + "," + log.action;
+    ws->textAll(message);
+}
+
 void WebServerModule::sendButtonEvent() {
     ws->textAll("button_pressed");
 }
@@ -298,6 +356,9 @@ void WebServerModule::setRelayState(bool state) {
     digitalWrite(ledPin, state ? HIGH : LOW);
     // Minimal logging
     Serial.println("Relay: " + String(state ? "ON" : "OFF"));
+    // Log the action
+    String action = state ? "OPEN" : "CLOSE";
+    addLog(action);
 }
 
 bool WebServerModule::getRelayState() {

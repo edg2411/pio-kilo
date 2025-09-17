@@ -5,13 +5,21 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncWebSocket.h>
+#include <time.h>
+#include <sys/time.h>
 #include <vector>
 #include <String>
+
+struct LogEntry {
+    String timestamp;
+    String action;
+};
 
 class WebServerModule {
 private:
     AsyncWebServer* server;
     AsyncWebSocket* ws;
+    std::vector<LogEntry> logs;
     int relayPin;
     int ledPin;
     bool relayState;
@@ -24,6 +32,7 @@ private:
     // HTML templates
     String getLoginPage(bool error = false);
     String getControlPage();
+    String getLogsHTML();
     String getHeader();
     String getFooter();
     
@@ -48,6 +57,13 @@ public:
     ~WebServerModule();
 
     void begin();
+
+    // NTP
+    String getCurrentTime();
+
+    // Logging
+    void addLog(String action);
+    void sendLogToClients(LogEntry log);
 
     // WebSocket
     void sendButtonEvent();

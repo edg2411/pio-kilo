@@ -1,11 +1,16 @@
-# ESP32 IoT Project with MQTT and WiFi Support
+# ESP32 Door Control System with Web Interface
 
-A comprehensive ESP32 IoT project featuring JSON-based configuration, MQTT communication, WiFi static IP support, and robust network management.
+A comprehensive ESP32-based door control system featuring web interface, real-time updates via WebSocket, NTP time synchronization, log history, MQTT communication, and robust network management.
 
 ## 🚀 Features
 
 ### Core Functionality
 - **JSON Configuration**: All settings loaded from `data/config.json`
+- **Web Server**: Secure web interface with authentication for door control
+- **Real-time Updates**: WebSocket integration for live status updates
+- **NTP Time Sync**: Accurate date and time synchronization
+- **Log History**: Comprehensive logging with date/time stamps, max 100 entries, displayed in reverse chronological order
+- **Door Control**: Relay-based door operation with hardware state monitoring
 - **MQTT Communication**: Secure MQTT with configurable topics and automatic reconnection
 - **WiFi Management**: DHCP or static IP configuration with failover support
 - **Network Resilience**: Automatic reconnection with rate limiting
@@ -16,6 +21,14 @@ A comprehensive ESP32 IoT project featuring JSON-based configuration, MQTT commu
 - **Sensor Data**: Simulated sensor readings (10s intervals)
 - **Status Updates**: System status reports (60s intervals)
 - **Command Reception**: Remote command handling with callbacks
+
+### Web Interface Features
+- **Authentication**: Secure login system with session management
+- **Real-time Updates**: WebSocket-powered live door status and log updates
+- **Door Control**: Web-based open/close/toggle operations
+- **Log History**: View up to 100 recent actions with date/time stamps
+- **Responsive Design**: Mobile-friendly web interface
+- **NTP Synchronization**: Accurate timestamps for all log entries
 
 ### Network Architecture
 - **Priority-based Connection**: WiFi → Ethernet → LTE
@@ -28,21 +41,27 @@ A comprehensive ESP32 IoT project featuring JSON-based configuration, MQTT commu
 ```
 ├── data/
 │   ├── config.json          # Main configuration file
-│   └── config.json.example  # Configuration template
+│   ├── config.json.example  # Configuration template
+│   └── emqxsl-ca.crt        # MQTT SSL certificate
 ├── include/                 # Header files
+│   ├── board.h             # Hardware pin definitions
 │   ├── ConfigLoader.h      # JSON configuration loader
+│   ├── EthernetModule.h    # Ethernet functionality
+│   ├── LTEModule.h         # LTE modem support
 │   ├── MQTTModule.h        # MQTT communication module
 │   ├── NetworkController.h # Network management
-│   ├── WiFiModule.h        # WiFi functionality
-│   └── board.h             # Hardware pin definitions
+│   ├── WebServerModule.h   # Web server and WebSocket
+│   └── WiFiModule.h        # WiFi functionality
 ├── lib/                    # Custom libraries (empty)
 ├── src/                    # Source files
 │   ├── main.cpp           # Main application
 │   ├── ConfigLoader.cpp   # Configuration implementation
+│   ├── EthernetModule.cpp # Ethernet implementation
+│   ├── LTEModule.cpp      # LTE implementation
 │   ├── MQTTModule.cpp     # MQTT implementation
 │   ├── NetworkController.cpp # Network controller
-│   ├── WiFiModule.cpp     # WiFi implementation
-│   └── *.cpp              # Other module implementations
+│   ├── WebServerModule.cpp # Web server implementation
+│   └── WiFiModule.cpp     # WiFi implementation
 ├── test/                   # Test files
 ├── platformio.ini         # PlatformIO configuration
 ├── .gitignore            # Git ignore rules
@@ -116,6 +135,14 @@ pio run
 pio run --target upload
 ```
 
+### 5. Access Web Interface
+After successful upload, the ESP32 will start a web server. Access it at:
+```
+http://<ESP32_IP_ADDRESS>
+```
+- Default login: `admin` / `admin`
+- Use the web interface to control the door and view logs
+
 ## 📡 MQTT Topics
 
 ### Publishing Topics
@@ -151,11 +178,20 @@ pio run --target upload
 
 ## 📊 Monitoring
 
+### Web Interface
+- Access the web interface at `http://<ESP32_IP>`
+- View real-time door status and log history
+- Monitor system logs with date/time stamps
+- Control door operations remotely
+
 ### Serial Output
 The device provides detailed serial output:
 - Configuration loading status
 - Network connection events
 - MQTT connection/disconnection
+- Web server startup
+- NTP synchronization status
+- Door control operations
 - Message publishing confirmations
 - Command reception confirmations
 
@@ -167,6 +203,22 @@ The device provides detailed serial output:
 ## 🐛 Troubleshooting
 
 ### Common Issues
+
+**Web Interface Not Accessible**
+- Ensure ESP32 is connected to network
+- Check IP address in serial output
+- Verify web server started successfully
+- Try accessing with different browser
+
+**NTP Time Sync Fails**
+- Check network connectivity
+- Verify NTP server accessibility
+- Monitor serial output for NTP errors
+
+**WebSocket Updates Not Working**
+- Check browser console for JavaScript errors
+- Ensure WebSocket connection is established
+- Verify firewall allows WebSocket connections
 
 **MQTT Connection Fails**
 - Check broker credentials in `config.json`
