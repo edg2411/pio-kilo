@@ -153,8 +153,8 @@ void WebServerModule::handleClose(AsyncWebServerRequest *request) {
 String WebServerModule::getLoginPage(bool error) {
     String html = getHeader();
     html += "<div class='login-container'>";
-    html += "<h1>ESP32 Door Control</h1>";
-    html += "<h2>Login</h2>";
+    html += "<h1>Control de acceso</h1>";
+    html += "<h2>Sucursal 001</h2>";
     
     if (error) {
         html += "<div class='error'>Invalid username or password</div>";
@@ -188,27 +188,27 @@ String WebServerModule::getControlPage() {
 
     String html = getHeader();
     html += "<div class='control-container'>";
-    html += "<h1>ESP32 Door Control</h1>";
+    html += "<h1>Control de acceso</h1>";
     html += "<div class='status'>";
-    html += "<h2>Door Status: <span class='" + String(relayState ? "status-open" : "status-closed") + "'>" + String(relayState ? "OPEN" : "CLOSED") + "</span></h2>";
+    html += "<h2>Estado: <span class='" + String(relayState ? "status-open" : "status-closed") + "'>" + String(relayState ? "ABIERTO" : "CERRADO") + "</span></h2>";
     html += "</div>";
     
     html += "<div class='controls'>";
     html += "<form method='POST' action='/control' style='display: inline;'>";
     html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
     html += "<input type='hidden' name='action' value='open'>";
-    html += "<button type='submit' class='btn btn-success'>Open Door</button>";
+    html += "<button type='submit' class='btn btn-success'>Abrir</button>";
     html += "</form>";
 
     html += "<form method='POST' action='/control' style='display: inline; margin-left: 20px;'>";
     html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
     html += "<input type='hidden' name='action' value='close'>";
-    html += "<button type='submit' class='btn btn-danger'>Close Door</button>";
+    html += "<button type='submit' class='btn btn-danger'>Cerrar</button>";
     html += "</form>";
     html += "</div>";
 
     html += "<div class='logs'>";
-    html += "<h2>Log History</h2>";
+    html += "<h2>Historial</h2>";
     html += getLogsHTML();
     html += "</div>";
 
@@ -259,7 +259,7 @@ String WebServerModule::getControlPage() {
 }
 
 String WebServerModule::getLogsHTML() {
-    String html = "<table id='logTable'><thead><tr><th>Timestamp</th><th>Action</th></tr></thead><tbody>";
+    String html = "<table id='logTable'><thead><tr><th>Fecha y Hora</th><th>Accion</th></tr></thead><tbody>";
     for (auto it = logs.rbegin(); it != logs.rend(); ++it) {
         html += "<tr><td>" + it->timestamp + "</td><td>" + it->action + "</td></tr>";
     }
@@ -269,7 +269,7 @@ String WebServerModule::getLogsHTML() {
 
 String WebServerModule::getHeader() {
     String html = "<!DOCTYPE html><html><head>";
-    html += "<title>ESP32 Door Control</title>";
+    html += "<title>Control de Acceso</title>";
     html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
     html += "<style>";
     html += "body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#f5f5f5;}";
@@ -357,7 +357,7 @@ void WebServerModule::setRelayState(bool state) {
     // Minimal logging
     Serial.println("Relay: " + String(state ? "ON" : "OFF"));
     // Log the action
-    String action = state ? "OPEN" : "CLOSE";
+    String action = state ? "ABRIR" : "CERRAR";
     addLog(action);
 }
 
