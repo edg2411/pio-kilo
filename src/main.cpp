@@ -15,9 +15,13 @@ const unsigned long debounceDelay = 200;
 
 // Button interrupt service routine
 void IRAM_ATTR buttonISR() {
-    if (millis() - lastButtonPress > debounceDelay) {
+    unsigned long now = millis();
+    if (now - lastButtonPress > debounceDelay) {
         buttonPressed = true;
-        lastButtonPress = millis();
+        lastButtonPress = now;
+        Serial.println("BUTTON INTERRUPT: Triggered at " + String(now));
+    } else {
+        Serial.println("BUTTON INTERRUPT: Ignored (debounce) at " + String(now));
     }
 }
 
@@ -106,11 +110,21 @@ void loop() {
     // Handle button press (interrupt-based)
     if (buttonPressed) {
         buttonPressed = false;  // Reset flag
-        bool newState = !webServer->getRelayState();
-        webServer->setRelayState(newState);
+
+        // Read ACTUAL hardware state, not internal state
+        bool currentHardwareState = digitalRead(RELAY_PIN);
+        bool newState = !currentHardwareState;  // Toggle from actual hardware
+
+        // Update hardware
         digitalWrite(RELAY_PIN, newState ? HIGH : LOW);
         digitalWrite(LED_PIN, newState ? HIGH : LOW);
-        Serial.println("Button pressed, door toggled to " + String(newState ? "OPEN" : "CLOSED"));
+
+        // Update internal state to match
+        webServer->setRelayState(newState);
+
+        Serial.println("Button: Hardware was " + String(currentHardwareState ? "HIGH" : "LOW") +
+                      ", toggled to " + String(newState ? "HIGH" : "LOW") +
+                      " (" + String(newState ? "OPEN" : "CLOSED") + ")");
     }
 
     delay(1);  // Very short delay

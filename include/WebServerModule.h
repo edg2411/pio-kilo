@@ -9,12 +9,10 @@
 class WebServerModule {
 private:
     WiFiServer* server;
-    bool relayState;
-    String sessionToken;
-
-    // Pin definitions
     int relayPin;
     int ledPin;
+    bool relayState;
+    String sessionToken;
 
     // Hardcoded credentials (for now)
     const String USERNAME = "admin";

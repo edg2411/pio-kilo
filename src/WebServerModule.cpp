@@ -1,7 +1,9 @@
 #include "WebServerModule.h"
 #include <Arduino.h>
 
-WebServerModule::WebServerModule(int port, int relayPin, int ledPin) : relayState(false), relayPin(relayPin), ledPin(ledPin) {
+WebServerModule::WebServerModule(int port, int relayPin, int ledPin) : relayState(false) {
+    this->relayPin = relayPin;
+    this->ledPin = ledPin;
     server = new WiFiServer(port);
     sessionToken = "";
 }
@@ -16,7 +18,7 @@ void WebServerModule::begin() {
 }
 
 void WebServerModule::handleClient() {
-    WiFiClient client = server->available();
+    WiFiClient client = server->accept();
     if (client) {
         String request = "";
         bool requestComplete = false;
@@ -182,6 +184,7 @@ void WebServerModule::handleLogin(WiFiClient& client, String request) {
 void WebServerModule::handleControl(WiFiClient& client, String request) {
     Serial.println("=== CONTROL REQUEST ===");
     Serial.println("Session token: " + sessionToken);
+    Serial.println("Full request: " + request);
 
     // Check authentication - handle both GET and POST
     bool isAuthenticated = false;
@@ -277,6 +280,15 @@ String WebServerModule::getLoginPage(bool error) {
 }
 
 String WebServerModule::getControlPage() {
+    // CRITICAL: Only read hardware state - NEVER write to it
+    bool actualHardwareState = digitalRead(relayPin);
+    Serial.println("[PAGE LOAD] Hardware read: PIN" + String(relayPin) + "=" + String(actualHardwareState ? "HIGH" : "LOW") +
+                  ", Previous internal state: " + String(relayState ? "OPEN" : "CLOSED"));
+
+    // Update internal state to match hardware for UI display
+    relayState = actualHardwareState;
+    Serial.println("[PAGE LOAD] Updated UI to show: " + String(relayState ? "OPEN" : "CLOSED"));
+
     String html = getHeader();
     html += "<div class='control-container'>";
     html += "<h1>ESP32 Door Control</h1>";
