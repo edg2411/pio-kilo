@@ -187,7 +187,6 @@ String WebServerModule::getControlPage() {
     html += "<h1>ESP32 Door Control</h1>";
     html += "<div class='status'>";
     html += "<h2>Door Status: <span class='" + String(relayState ? "status-open" : "status-closed") + "'>" + String(relayState ? "OPEN" : "CLOSED") + "</span></h2>";
-    html += "<button onclick='location.reload()' class='btn btn-secondary' style='font-size: 12px; padding: 5px 10px; margin-left: 10px;'>Refresh</button>";
     html += "</div>";
     
     html += "<div class='controls'>";
