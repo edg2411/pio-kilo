@@ -28,14 +28,20 @@ private:
     bool relayState;
     String sessionToken;
 
-    // Hardcoded credentials (for now)
-    const String USERNAME = "admin";
-    const String PASSWORD = "admin";
+    // Configurable user credentials
+    String USERNAME = "admin";
+    String PASSWORD = "admin";
+
+    // Hardcoded admin credentials (fallback)
+    const String ADMIN_USERNAME = "admin";
+    const String ADMIN_PASSWORD = "admin123";
     
     // HTML templates
     String getLoginPage(bool error = false);
     String getControlPage();
     String getLogsPage();
+    String getConfigPage();
+    String getRestartPage();
     String getLogsHTML();
     String getAllLogsHTML();
     String getHeader();
@@ -51,6 +57,8 @@ private:
     void handleLogin(AsyncWebServerRequest *request);
     void handleControl(AsyncWebServerRequest *request);
     void handleLogsPage(AsyncWebServerRequest *request);
+    void handleConfigPage(AsyncWebServerRequest *request);
+    void handleConfigUpdate(AsyncWebServerRequest *request);
     void handleLogout(AsyncWebServerRequest *request);
     void handleOpen(AsyncWebServerRequest *request);
     void handleClose(AsyncWebServerRequest *request);
@@ -72,6 +80,12 @@ public:
     void sendLogToClients(LogEntry log);
     void loadLogsFromFile();
     void saveLogsToFile();
+
+    // Configuration
+    void loadUserConfig();
+    void saveUserConfig();
+    void loadNetworkConfig();
+    void saveNetworkConfig(bool dhcp, String ip, String gateway, String subnet, String dns1);
 
     // WebSocket
     void sendButtonEvent();

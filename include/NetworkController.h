@@ -65,6 +65,9 @@ public:
     void setEthernetStaticIP(IPAddress ip, IPAddress gateway, IPAddress subnet, IPAddress dns1, IPAddress dns2);
     void setLTEAPN(const String& apn, const String& user = "", const String& pass = "");
 
+    // Network configuration
+    void loadAndApplyNetworkConfig();
+
     NetInterface getCurrentInterface();
     NetworkState getState();
     IPAddress getIP();

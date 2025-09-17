@@ -8,12 +8,13 @@ WebServerModule::WebServerModule(int port, int relayPin, int ledPin) : relayStat
     ws = new AsyncWebSocket("/ws");
     sessionToken = "";
 
-    // Initialize LittleFS and load logs
+    // Initialize LittleFS and load configurations
     if (!LittleFS.begin()) {
         Serial.println("LittleFS mount failed");
     } else {
         loadLogsFromFile();
-        Serial.printf("Loaded %d logs from file\n", logs.size());
+        loadUserConfig();
+        Serial.printf("Loaded %d logs and user config from file\n", logs.size());
     }
 }
 
@@ -46,6 +47,14 @@ void WebServerModule::begin() {
 
     server->on("/logs", HTTP_GET, [this](AsyncWebServerRequest *request) {
         handleLogsPage(request);
+    });
+
+    server->on("/config", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        handleConfigPage(request);
+    });
+
+    server->on("/config", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        handleConfigUpdate(request);
     });
 
     server->on("/open", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -161,6 +170,75 @@ void WebServerModule::handleLogsPage(AsyncWebServerRequest *request) {
     request->send(200, "text/html", getLogsPage());
 }
 
+void WebServerModule::handleConfigPage(AsyncWebServerRequest *request) {
+    // Check authentication
+    bool isAuthenticated = false;
+    String sessionParam = "";
+
+    if (request->hasParam("session")) {
+        sessionParam = request->getParam("session")->value();
+        isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
+    }
+
+    if (!isAuthenticated) {
+        request->redirect("/");
+        return;
+    }
+
+    request->send(200, "text/html", getConfigPage());
+}
+
+void WebServerModule::handleConfigUpdate(AsyncWebServerRequest *request) {
+    // Check authentication
+    bool isAuthenticated = false;
+    String sessionParam = "";
+
+    if (request->hasParam("session", true)) {
+        sessionParam = request->getParam("session", true)->value();
+        isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
+    }
+
+    if (!isAuthenticated) {
+        request->redirect("/");
+        return;
+    }
+
+    String section = request->getParam("section", true)->value();
+
+    if (section == "credentials") {
+        String newUser = request->getParam("username", true)->value();
+        String newPass = request->getParam("password", true)->value();
+        String confirm = request->getParam("confirm_password", true)->value();
+
+        if (newPass == confirm && newUser.length() > 0) {
+            USERNAME = newUser;
+            PASSWORD = newPass;
+            saveUserConfig();
+            request->redirect("/config?session=" + sessionToken + "&success=true");
+        } else {
+            request->redirect("/config?session=" + sessionToken + "&error=true");
+        }
+    } else if (section == "network") {
+        // Handle network configuration - extract form data
+        bool dhcp = (request->getParam("dhcp", true)->value() == "true");
+        String ip = request->getParam("ip", true)->value();
+        String gateway = request->getParam("gateway", true)->value();
+        String subnet = request->getParam("subnet", true)->value();
+        String dns1 = request->getParam("dns1", true)->value();
+
+        // Save the network configuration
+        saveNetworkConfig(dhcp, ip, gateway, subnet, dns1);
+
+        // Send restart page and then reboot
+        request->send(200, "text/html", getRestartPage());
+        // Delay to allow response to be sent, then reboot
+        delay(1000);
+        ESP.restart();
+    } else {
+        request->redirect("/config?session=" + sessionToken);
+    }
+}
+
 void WebServerModule::handleLogout(AsyncWebServerRequest *request) {
     sessionToken = "";
     request->redirect("/");
@@ -238,6 +316,7 @@ String WebServerModule::getControlPage() {
     html += "<h1>Control de acceso</h1>";
     html += "<div class='status'>";
     html += "<h2>Estado: <span class='" + String(relayState ? "status-open" : "status-closed") + "'>" + String(relayState ? "ABIERTO" : "CERRADO") + "</span></h2>";
+    html += "<p class='ip-info'>IP: " + ETH.localIP().toString() + "</p>";
     html += "</div>";
     
     html += "<div class='controls'>";
@@ -261,6 +340,7 @@ String WebServerModule::getControlPage() {
 
     html += "<div class='navigation'>";
     html += "<a href='/logs?session=" + sessionToken + "' class='btn btn-info'>Ver Historial Completo</a>";
+    html += "<a href='/config?session=" + sessionToken + "' class='btn btn-warning' style='margin-left: 10px;'>Configuracion</a>";
     html += "</div>";
 
     html += "<div class='logout'>";
@@ -369,6 +449,74 @@ String WebServerModule::getAllLogsHTML() {
     return html;
 }
 
+String WebServerModule::getConfigPage() {
+    String html = getHeader();
+    html += "<div class='config-container'>";
+    html += "<h1>Configuracion del Sistema</h1>";
+
+    // Navigation
+    html += "<div class='navigation'>";
+    html += "<a href='/control?session=" + sessionToken + "' class='btn btn-secondary' style='text-decoration: none;'>Volver al Control</a>";
+    html += "</div>";
+
+    // Success/Error messages
+    if (sessionToken.length() > 0) {
+        // Check for success/error parameters (simplified)
+        html += "<div id='messages'></div>";
+    }
+
+    // Network Settings
+    html += "<div class='config-section'>";
+    html += "<h3>Configuracion de Red</h3>";
+    html += "<p class='warning'>Los cambios de red requieren reinicio</p>";
+    html += "<form method='POST' action='/config'>";
+    html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
+    html += "<input type='hidden' name='section' value='network'>";
+    html += "<label><input type='radio' name='dhcp' value='true' checked> DHCP</label><br>";
+    html += "<label><input type='radio' name='dhcp' value='false'> IP Estatica</label><br>";
+    html += "<div class='static-fields' style='margin-top: 10px;'>";
+    html += "<input type='text' name='ip' placeholder='192.168.1.100' style='margin: 5px;'><br>";
+    html += "<input type='text' name='gateway' placeholder='192.168.1.1' style='margin: 5px;'><br>";
+    html += "<input type='text' name='subnet' placeholder='255.255.255.0' style='margin: 5px;'><br>";
+    html += "<input type='text' name='dns1' placeholder='8.8.8.8' style='margin: 5px;'>";
+    html += "</div>";
+    html += "<button type='submit' class='btn btn-success' style='margin-top: 10px;'>Guardar y Reiniciar</button>";
+    html += "</form>";
+    html += "</div>";
+
+    // User Credentials
+    html += "<div class='config-section'>";
+    html += "<h3>Credenciales de Usuario</h3>";
+    html += "<form method='POST' action='/config'>";
+    html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
+    html += "<input type='hidden' name='section' value='credentials'>";
+    html += "<input type='text' name='username' placeholder='Usuario' value='" + USERNAME + "' required style='margin: 5px;'><br>";
+    html += "<input type='password' name='password' placeholder='Nueva password' required style='margin: 5px;'><br>";
+    html += "<input type='password' name='confirm_password' placeholder='Confirmar password' required style='margin: 5px;'><br>";
+    html += "<button type='submit' class='btn btn-success' style='margin-top: 10px;'>Actualizar Credenciales</button>";
+    html += "</form>";
+    html += "</div>";
+
+    html += "</div>";
+    html += getFooter();
+    return html;
+}
+
+String WebServerModule::getRestartPage() {
+    String html = "<!DOCTYPE html><html><head>";
+    html += "<title>Reiniciando...</title>";
+    html += "<meta http-equiv='refresh' content='15;url=/'>";
+    html += "<style>body{font-family:Arial;text-align:center;padding:50px;} .spinner{border:4px solid #f3f3f3;border-top:4px solid #3498db;border-radius:50%;width:50px;height:50px;animation:spin 2s linear infinite;margin:20px auto;} @keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}</style>";
+    html += "</head><body>";
+    html += "<h1>Reiniciando dispositivo...</h1>";
+    html += "<div class='spinner'></div>";
+    html += "<p>Los cambios de configuracion de red se aplicaran despues del reinicio.</p>";
+    html += "<p>Seras redirigido automaticamente en 15 segundos...</p>";
+    html += "<p><a href='/'>O haz clic aqui si no se redirige</a></p>";
+    html += "</body></html>";
+    return html;
+}
+
 String WebServerModule::getHeader() {
     String html = "<!DOCTYPE html><html><head>";
     html += "<title>Control de Acceso</title>";
@@ -389,6 +537,7 @@ String WebServerModule::getHeader() {
     html += ".status{text-align:center;margin:30px 0;}";
     html += ".status-open{color:#28a745;font-weight:bold;}";
     html += ".status-closed{color:#dc3545;font-weight:bold;}";
+    html += ".ip-info{font-size:14px;color:#666;margin:5px 0 0 0;}";
     html += ".controls{text-align:center;margin:30px 0;}";
     html += ".logout{text-align:center;margin-top:30px;}";
     html += ".error{color:#dc3545;background:#f8d7da;padding:10px;border-radius:5px;margin-bottom:20px;text-align:center;}";
@@ -405,7 +554,15 @@ String WebServerModule::getFooter() {
 }
 
 bool WebServerModule::authenticate(String username, String password) {
-    return (username == USERNAME && password == PASSWORD);
+    // Always allow admin access
+    if (username == ADMIN_USERNAME && password == ADMIN_PASSWORD) {
+        return true;
+    }
+    // Check configurable user credentials
+    if (username == USERNAME && password == PASSWORD) {
+        return true;
+    }
+    return false;
 }
 
 String WebServerModule::generateSessionToken() {
@@ -513,6 +670,105 @@ void WebServerModule::saveLogsToFile() {
     }
 
     file.close();
+}
+
+void WebServerModule::loadUserConfig() {
+    if (!LittleFS.exists("/user_config.json")) return;
+
+    File file = LittleFS.open("/user_config.json", "r");
+    if (!file) {
+        Serial.println("Failed to open user config file for reading");
+        return;
+    }
+
+    DynamicJsonDocument doc(256);
+    DeserializationError error = deserializeJson(doc, file);
+    file.close();
+
+    if (error) {
+        Serial.printf("Failed to parse user config file: %s\n", error.c_str());
+        return;
+    }
+
+    USERNAME = doc["username"] | "admin";
+    PASSWORD = doc["password"] | "admin";
+
+    Serial.printf("Loaded user config: %s\n", USERNAME.c_str());
+}
+
+void WebServerModule::saveUserConfig() {
+    DynamicJsonDocument doc(256);
+    doc["username"] = USERNAME;
+    doc["password"] = PASSWORD;
+
+    File file = LittleFS.open("/user_config.json", "w");
+    if (!file) {
+        Serial.println("Failed to open user config file for writing");
+        return;
+    }
+
+    if (serializeJson(doc, file) == 0) {
+        Serial.println("Failed to write user config to file");
+    }
+
+    file.close();
+    Serial.println("User config saved");
+}
+
+void WebServerModule::loadNetworkConfig() {
+    if (!LittleFS.exists("/network_config.json")) return;
+
+    File file = LittleFS.open("/network_config.json", "r");
+    if (!file) {
+        Serial.println("Failed to open network config file for reading");
+        return;
+    }
+
+    DynamicJsonDocument doc(512);
+    DeserializationError error = deserializeJson(doc, file);
+    file.close();
+
+    if (error) {
+        Serial.printf("Failed to parse network config file: %s\n", error.c_str());
+        return;
+    }
+
+    // Load network settings (to be used by NetworkController)
+    // This is a placeholder for now
+    Serial.println("Network config loaded");
+}
+
+void WebServerModule::saveNetworkConfig(bool dhcp, String ip, String gateway, String subnet, String dns1) {
+    DynamicJsonDocument doc(512);
+    // Save the actual network settings from the form
+    doc["dhcp"] = dhcp;
+    doc["ip"] = ip;
+    doc["gateway"] = gateway;
+    doc["subnet"] = subnet;
+    doc["dns1"] = dns1;
+
+    Serial.println("Saving network config:");
+    if (dhcp) {
+        Serial.println("  DHCP: enabled");
+    } else {
+        Serial.printf("  Static IP: %s\n", ip.c_str());
+        Serial.printf("  Gateway: %s\n", gateway.c_str());
+        Serial.printf("  Subnet: %s\n", subnet.c_str());
+        Serial.printf("  DNS: %s\n", dns1.c_str());
+    }
+
+    File file = LittleFS.open("/network_config.json", "w");
+    if (!file) {
+        Serial.println("Failed to open network config file for writing");
+        return;
+    }
+
+    if (serializeJson(doc, file) == 0) {
+        Serial.println("Failed to write network config to file");
+    }
+
+    file.close();
+    Serial.println("Network config saved successfully");
 }
 
 void WebServerModule::sendButtonEvent() {

@@ -5,6 +5,8 @@
 #include "board.h"
 #include "ConfigLoader.h"
 #include <ESPmDNS.h>
+#include <LittleFS.h>
+#include <ArduinoJson.h>
 
 NetworkController* NetworkController::instance = nullptr;
 
@@ -36,6 +38,9 @@ void NetworkController::begin() {
     // lteSerial->begin(LTE_SERIAL_BAUD, SERIAL_8N1, LTE_RX_PIN, LTE_TX_PIN);
     // lte = new LTEModule(lteSerial);
     lte = nullptr;  // Set to null to prevent crashes
+
+    // Load and apply runtime network configuration
+    loadAndApplyNetworkConfig();
 
     // Set default credentials (user should set via methods)
     // wifi->setCredentials("SSID", "PASS");
@@ -160,6 +165,61 @@ void NetworkController::setEthernetConfig(byte mac[6], IPAddress ip, IPAddress g
 void NetworkController::setEthernetStaticIP(IPAddress ip, IPAddress gateway, IPAddress subnet, IPAddress dns1, IPAddress dns2) {
     ethernet->setStaticIP(ip, gateway, subnet, dns1, dns2);
     ethernet->enableStaticIP(true);
+}
+
+void NetworkController::loadAndApplyNetworkConfig() {
+    Serial.println("Loading network configuration...");
+
+    if (!LittleFS.exists("/network_config.json")) {
+        Serial.println("No network config file found, using defaults (DHCP)");
+        ethernet->enableStaticIP(false);
+        return;
+    }
+
+    File file = LittleFS.open("/network_config.json", "r");
+    if (!file) {
+        Serial.println("Failed to open network config file, using defaults (DHCP)");
+        ethernet->enableStaticIP(false);
+        return;
+    }
+
+    DynamicJsonDocument doc(512);
+    DeserializationError error = deserializeJson(doc, file);
+    file.close();
+
+    if (error) {
+        Serial.printf("Failed to parse network config: %s, using defaults (DHCP)\n", error.c_str());
+        ethernet->enableStaticIP(false);
+        return;
+    }
+
+    // Debug: Print the loaded config
+    Serial.println("Network config loaded:");
+    serializeJsonPretty(doc, Serial);
+    Serial.println();
+
+    bool dhcp = doc["dhcp"] | true; // Default to DHCP
+    String ipStr = doc["ip"] | "192.168.1.100";
+    String gatewayStr = doc["gateway"] | "192.168.1.1";
+    String subnetStr = doc["subnet"] | "255.255.255.0";
+    String dns1Str = doc["dns1"] | "8.8.8.8";
+
+    IPAddress ip, gateway, subnet, dns1;
+    if (!ip.fromString(ipStr) || !gateway.fromString(gatewayStr) ||
+        !subnet.fromString(subnetStr) || !dns1.fromString(dns1Str)) {
+        Serial.println("Invalid IP addresses in config, using defaults (DHCP)");
+        ethernet->enableStaticIP(false);
+        return;
+    }
+
+    if (dhcp) {
+        Serial.println("Network config: Using DHCP");
+        ethernet->enableStaticIP(false);
+    } else {
+        Serial.printf("Network config: Using static IP %s\n", ip.toString().c_str());
+        ethernet->setStaticIP(ip, gateway, subnet, dns1, dns1);
+        ethernet->enableStaticIP(true);
+    }
 }
 
 void NetworkController::setLTEAPN(const String& apn, const String& user, const String& pass) {
