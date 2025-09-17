@@ -101,19 +101,11 @@ void loop() {
     if (buttonPressed) {
         buttonPressed = false;  // Reset flag
 
-        // Read ACTUAL hardware state, not internal state
-        bool currentHardwareState = digitalRead(RELAY_PIN);
-        bool newState = !currentHardwareState;  // Toggle from actual hardware
-
-        // Update hardware
-        digitalWrite(RELAY_PIN, newState ? HIGH : LOW);
-        digitalWrite(LED_PIN, newState ? HIGH : LOW);
-
-        // Update internal state to match
-        webServer->setRelayState(newState);
+        // Send WebSocket event instead of controlling relay directly
+        webServer->sendButtonEvent();
 
         // Reduced logging to prevent buffer overflow
-        Serial.println("Button toggled to " + String(newState ? "OPEN" : "CLOSED"));
+        Serial.println("Button pressed, sent WebSocket event");
     }
 
     delay(1);  // Very short delay

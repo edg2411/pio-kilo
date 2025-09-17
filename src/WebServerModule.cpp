@@ -5,11 +5,13 @@ WebServerModule::WebServerModule(int port, int relayPin, int ledPin) : relayStat
     this->relayPin = relayPin;
     this->ledPin = ledPin;
     server = new AsyncWebServer(port);
+    ws = new AsyncWebSocket("/ws");
     sessionToken = "";
 }
 
 WebServerModule::~WebServerModule() {
     delete server;
+    delete ws;
 }
 
 void WebServerModule::begin() {
@@ -41,6 +43,16 @@ void WebServerModule::begin() {
     server->on("/close", HTTP_GET, [this](AsyncWebServerRequest *request) {
         handleClose(request);
     });
+
+    // WebSocket setup
+    ws->onEvent([this](AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
+        if(type == WS_EVT_CONNECT){
+            Serial.println("WebSocket client connected");
+        } else if(type == WS_EVT_DISCONNECT){
+            Serial.println("WebSocket client disconnected");
+        }
+    });
+    server->addHandler(ws);
 
     server->begin();
     Serial.println("Async web server started");
@@ -107,7 +119,13 @@ void WebServerModule::handleControl(AsyncWebServerRequest *request) {
     if (request->method() == HTTP_POST) {
         if (request->hasParam("action", true)) {
             String action = request->getParam("action", true)->value();
-            setRelayState(action == "open");
+            if (action == "open") {
+                setRelayState(true);
+            } else if (action == "close") {
+                setRelayState(false);
+            } else if (action == "toggle") {
+                setRelayState(!getRelayState());
+            }
         }
     }
     request->send(200, "text/html", getControlPage());
@@ -190,6 +208,34 @@ String WebServerModule::getControlPage() {
     html += "<a href='/logout' class='btn btn-secondary'>Logout</a>";
     html += "</div>";
     html += "</div>";
+
+    // WebSocket client code
+    html += "<script>";
+    html += "var ws = new WebSocket('ws://' + window.location.host + '/ws');";
+    html += "ws.onopen = function() { console.log('WebSocket connected'); };";
+    html += "ws.onmessage = function(event) {";
+    html += "    if (event.data === 'button_pressed') {";
+    html += "        var sessionValue = document.querySelector('input[name=\"session\"]').value;";
+    html += "        var form = document.createElement('form');";
+    html += "        form.method = 'POST';";
+    html += "        form.action = '/control';";
+    html += "        var sessionInput = document.createElement('input');";
+    html += "        sessionInput.type = 'hidden';";
+    html += "        sessionInput.name = 'session';";
+    html += "        sessionInput.value = sessionValue;";
+    html += "        var actionInput = document.createElement('input');";
+    html += "        actionInput.type = 'hidden';";
+    html += "        actionInput.name = 'action';";
+    html += "        actionInput.value = 'toggle';";
+    html += "        form.appendChild(sessionInput);";
+    html += "        form.appendChild(actionInput);";
+    html += "        document.body.appendChild(form);";
+    html += "        form.submit();";
+    html += "    }";
+    html += "};";
+    html += "ws.onclose = function() { console.log('WebSocket disconnected'); };";
+    html += "</script>";
+
     html += getFooter();
     return html;
 }
@@ -242,6 +288,10 @@ bool WebServerModule::validateSession(String token) {
 }
 
 
+
+void WebServerModule::sendButtonEvent() {
+    ws->textAll("button_pressed");
+}
 
 void WebServerModule::setRelayState(bool state) {
     relayState = state;

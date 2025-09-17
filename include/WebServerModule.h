@@ -4,12 +4,14 @@
 #include <ETH.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
+#include <AsyncWebSocket.h>
 #include <vector>
 #include <String>
 
 class WebServerModule {
 private:
     AsyncWebServer* server;
+    AsyncWebSocket* ws;
     int relayPin;
     int ledPin;
     bool relayState;
@@ -46,6 +48,9 @@ public:
     ~WebServerModule();
 
     void begin();
+
+    // WebSocket
+    void sendButtonEvent();
 
     // Relay control
     void setRelayState(bool state);
