@@ -100,13 +100,6 @@ void setup() {
 void loop() {
     netManager->update();
 
-    // Handle web server clients (with timeout to prevent blocking)
-    static unsigned long lastWebCheck = 0;
-    if (millis() - lastWebCheck > 1) {  // Check every 1ms
-        webServer->handleClient();
-        lastWebCheck = millis();
-    }
-
     // Handle button press (interrupt-based)
     if (buttonPressed) {
         buttonPressed = false;  // Reset flag

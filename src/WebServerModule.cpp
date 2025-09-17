@@ -4,7 +4,7 @@
 WebServerModule::WebServerModule(int port, int relayPin, int ledPin) : relayState(false) {
     this->relayPin = relayPin;
     this->ledPin = ledPin;
-    server = new WiFiServer(port);
+    server = new AsyncWebServer(port);
     sessionToken = "";
 }
 
@@ -13,244 +13,137 @@ WebServerModule::~WebServerModule() {
 }
 
 void WebServerModule::begin() {
+    // Register routes
+    server->on("/", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        handleRoot(request);
+    });
+
+    server->on("/login", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        handleLogin(request);
+    });
+
+    server->on("/control", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        handleControl(request);
+    });
+
+    server->on("/control", HTTP_POST, [this](AsyncWebServerRequest *request) {
+        handleControl(request);
+    });
+
+    server->on("/logout", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        handleLogout(request);
+    });
+
+    server->on("/open", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        handleOpen(request);
+    });
+
+    server->on("/close", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        handleClose(request);
+    });
+
     server->begin();
-    Serial.println("Web server started");
+    Serial.println("Async web server started");
 }
 
-void WebServerModule::handleClient() {
-    WiFiClient client = server->accept();
-    if (client) {
-        String request = "";
-        bool requestComplete = false;
-        unsigned long startTime = millis();
 
-        // Read the entire request with timeout
-        while (client.connected() && !requestComplete && millis() - startTime < 1000) {
-            if (client.available()) {
-                char c = client.read();
-                request += c;
-
-                // Check for end of HTTP request (double newline)
-                if (request.endsWith("\r\n\r\n")) {
-                    requestComplete = true;
-                }
-            }
-        }
-
-        // Debug: Print the request
-        Serial.println("=== REQUEST RECEIVED ===");
-        Serial.println(request);
-        Serial.println("=== END REQUEST ===");
-
-        // Filter out completely empty requests (browser keep-alive, etc.)
-        if (request.length() == 0) {
-            // Silently ignore empty requests
-            client.stop();
-            return;
-        }
-
-        // Filter out invalid requests (too short or wrong format)
-        if (request.length() < 20 || !request.startsWith("GET ") && !request.startsWith("POST ")) {
-            Serial.println("=== INVALID REQUEST DETECTED ===");
-            Serial.println("Length: " + String(request.length()));
-            Serial.println("Starts with GET: " + String(request.startsWith("GET ")));
-            Serial.println("Starts with POST: " + String(request.startsWith("POST ")));
-            Serial.println("Raw request: '" + request + "'");
-            Serial.println("=== END INVALID REQUEST ===");
-
-            client.println("HTTP/1.1 400 Bad Request");
-            client.println("Connection: close");
-            client.println();
-            client.stop();
-            return;
-        }
-
-        // Check if this is a POST request that needs body data
-        if (request.indexOf("POST /login") >= 0 || request.indexOf("POST /control") >= 0) {
-            // Extract Content-Length from headers
-            int contentLength = 0;
-            int clIndex = request.indexOf("Content-Length: ");
-            if (clIndex >= 0) {
-                int clEnd = request.indexOf("\r\n", clIndex);
-                if (clEnd > clIndex) {
-                    String clStr = request.substring(clIndex + 16, clEnd);
-                    contentLength = clStr.toInt();
-                }
-            }
-
-            // Read POST body if present
-            if (contentLength > 0 && millis() - startTime < 1500) {
-                String body = "";
-                int bytesRead = 0;
-                while (client.connected() && bytesRead < contentLength && millis() - startTime < 1500) {
-                    if (client.available()) {
-                        char c = client.read();
-                        body += c;
-                        bytesRead++;
-                    }
-                }
-                request += body;
-                Serial.println("POST Body: " + body);
-            }
-        }
-
-        // Parse request
-        if (request.indexOf("GET / ") >= 0 || request.indexOf("GET /login") >= 0) {
-            Serial.println("Handling root/login request");
-            handleRoot(client, request);
-        } else if (request.indexOf("POST /login") >= 0) {
-            Serial.println("Handling login POST request");
-            handleLogin(client, request);
-        } else if (request.indexOf("GET /control") >= 0) {
-            Serial.println("Handling control GET request");
-            handleControl(client, request);
-        } else if (request.indexOf("POST /control") >= 0) {
-            Serial.println("Handling control POST request");
-            handleControl(client, request);
-        } else if (request.indexOf("GET /logout") >= 0) {
-            Serial.println("Handling logout request");
-            handleLogout(client);
-        } else if (request.indexOf("GET /open") >= 0) {
-            Serial.println("Handling open request");
-            // Direct relay control (for backward compatibility)
-            setRelayState(true);
-            client.println("HTTP/1.1 302 Found");
-            client.println("Location: /control");
-            client.println("Connection: close");
-            client.println();
-        } else if (request.indexOf("GET /close") >= 0) {
-            Serial.println("Handling close request");
-            // Direct relay control (for backward compatibility)
-            setRelayState(false);
-            client.println("HTTP/1.1 302 Found");
-            client.println("Location: /control");
-            client.println("Connection: close");
-            client.println();
-        } else {
-            Serial.println("404 - Request not recognized");
-            client.println("HTTP/1.1 404 Not Found");
-            client.println("Content-Type: text/html");
-            client.println("Connection: close");
-            client.println();
-            client.println("<h1>404 Not Found</h1>");
-        }
-
-        client.stop();
-    }
-}
-
-void WebServerModule::handleRoot(WiFiClient& client, String request) {
+void WebServerModule::handleRoot(AsyncWebServerRequest *request) {
     // Check if user is already logged in
-    if (request.indexOf("session=" + sessionToken) >= 0 && validateSession(sessionToken)) {
+    if (request->hasParam("session") && validateSession(request->getParam("session")->value())) {
         // Redirect to control page
-        client.println("HTTP/1.1 302 Found");
-        client.println("Location: /control");
-        client.println("Connection: close");
-        client.println();
+        request->redirect("/control?session=" + request->getParam("session")->value());
         return;
     }
-    
+
     // Show login page
-    client.println("HTTP/1.1 200 OK");
-    client.println("Content-Type: text/html");
-    client.println("Connection: close");
-    client.println();
-    client.println(getLoginPage());
+    request->send(200, "text/html", getLoginPage());
 }
 
-void WebServerModule::handleLogin(WiFiClient& client, String request) {
-    String username, password;
-    parseFormData(request, username, password);
+void WebServerModule::handleLogin(AsyncWebServerRequest *request) {
+    String username = "", password = "";
+    if (request->hasParam("username", true)) {
+        username = request->getParam("username", true)->value();
+    }
+    if (request->hasParam("password", true)) {
+        password = request->getParam("password", true)->value();
+    }
 
     if (authenticate(username, password)) {
         sessionToken = generateSessionToken();
         Serial.println("Login successful");
         // Redirect to control page with session
-        client.println("HTTP/1.1 302 Found");
-        client.println("Location: /control?session=" + sessionToken);
-        client.println("Connection: close");
-        client.println();
+        request->redirect("/control?session=" + sessionToken);
     } else {
         Serial.println("Login failed - invalid credentials");
         // Show login page with error
-        client.println("HTTP/1.1 200 OK");
-        client.println("Content-Type: text/html");
-        client.println("Connection: close");
-        client.println();
-        client.println(getLoginPage(true));
+        request->send(200, "text/html", getLoginPage(true));
     }
 }
 
-void WebServerModule::handleControl(WiFiClient& client, String request) {
+void WebServerModule::handleControl(AsyncWebServerRequest *request) {
     Serial.println("=== CONTROL REQUEST ===");
     Serial.println("Session token: " + sessionToken);
-    Serial.println("Full request: " + request);
 
-    // Check authentication - handle both GET and POST
+    // Check authentication
     bool isAuthenticated = false;
+    String sessionParam = "";
 
-    if (request.indexOf("GET /control") >= 0) {
+    if (request->method() == HTTP_GET) {
         // For GET requests, check URL parameters
-        String sessionParam = "";
-        int sessionIndex = request.indexOf("session=");
-        if (sessionIndex >= 0) {
-            int sessionEnd = request.indexOf(" ", sessionIndex);
-            if (sessionEnd < 0) sessionEnd = request.indexOf("\r\n", sessionIndex);
-            if (sessionEnd > sessionIndex) {
-                sessionParam = request.substring(sessionIndex + 8, sessionEnd);
-            }
+        if (request->hasParam("session")) {
+            sessionParam = request->getParam("session")->value();
         }
         Serial.println("GET session param: '" + sessionParam + "'");
         isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
-    } else if (request.indexOf("POST /control") >= 0) {
+    } else if (request->method() == HTTP_POST) {
         // For POST requests, check form data
-        int bodyStart = request.indexOf("\r\n\r\n");
-        if (bodyStart > 0) {
-            String body = request.substring(bodyStart + 4);
-            Serial.println("POST body: " + body);
-            if (body.indexOf("session=" + sessionToken) >= 0 && validateSession(sessionToken)) {
-                isAuthenticated = true;
-            }
+        if (request->hasParam("session", true)) {
+            sessionParam = request->getParam("session", true)->value();
         }
+        Serial.println("POST session param: '" + sessionParam + "'");
+        isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
     }
 
     Serial.println("Authentication result: " + String(isAuthenticated ? "SUCCESS" : "FAILED"));
 
     if (!isAuthenticated) {
         Serial.println("Redirecting to login");
-        client.println("HTTP/1.1 302 Found");
-        client.println("Location: /");
-        client.println("Connection: close");
-        client.println();
+        request->redirect("/");
         return;
     }
 
     // Handle POST requests for relay control
-    if (request.indexOf("POST /control") >= 0) {
-        if (request.indexOf("action=open") >= 0) {
-            Serial.println("Opening door");
-            setRelayState(true);
-        } else if (request.indexOf("action=close") >= 0) {
-            Serial.println("Closing door");
-            setRelayState(false);
+    if (request->method() == HTTP_POST) {
+        if (request->hasParam("action", true)) {
+            String action = request->getParam("action", true)->value();
+            if (action == "open") {
+                Serial.println("Opening door");
+                setRelayState(true);
+            } else if (action == "close") {
+                Serial.println("Closing door");
+                setRelayState(false);
+            }
         }
     }
 
     // Show control page
     Serial.println("Serving control page");
-    client.println("HTTP/1.1 200 OK");
-    client.println("Content-Type: text/html");
-    client.println("Connection: close");
-    client.println();
-    client.println(getControlPage());
+    request->send(200, "text/html", getControlPage());
 }
 
-void WebServerModule::handleLogout(WiFiClient& client) {
+void WebServerModule::handleLogout(AsyncWebServerRequest *request) {
     sessionToken = "";
-    client.println("HTTP/1.1 302 Found");
-    client.println("Location: /");
-    client.println("Connection: close");
-    client.println();
+    request->redirect("/");
+}
+
+void WebServerModule::handleOpen(AsyncWebServerRequest *request) {
+    setRelayState(true);
+    request->redirect("/control");
+}
+
+void WebServerModule::handleClose(AsyncWebServerRequest *request) {
+    setRelayState(false);
+    request->redirect("/control");
 }
 
 String WebServerModule::getLoginPage(bool error) {
@@ -366,41 +259,7 @@ bool WebServerModule::validateSession(String token) {
     return (token == sessionToken && token.length() > 0);
 }
 
-void WebServerModule::parseFormData(String request, String& username, String& password) {
-    int bodyStart = request.indexOf("\r\n\r\n");
-    if (bodyStart > 0) {
-        String body = request.substring(bodyStart + 4);
-        int userStart = body.indexOf("username=");
-        int passStart = body.indexOf("password=");
-        
-        if (userStart >= 0) {
-            int userEnd = body.indexOf("&", userStart);
-            if (userEnd < 0) userEnd = body.length();
-            username = urlDecode(body.substring(userStart + 9, userEnd));
-        }
-        
-        if (passStart >= 0) {
-            int passEnd = body.indexOf("&", passStart);
-            if (passEnd < 0) passEnd = body.length();
-            password = urlDecode(body.substring(passStart + 9, passEnd));
-        }
-    }
-}
 
-String WebServerModule::urlDecode(String str) {
-    str.replace("+", " ");
-    str.replace("%20", " ");
-    str.replace("%21", "!");
-    str.replace("%22", "\"");
-    str.replace("%23", "#");
-    str.replace("%24", "$");
-    str.replace("%25", "%");
-    str.replace("%26", "&");
-    str.replace("%27", "'");
-    str.replace("%28", "(");
-    str.replace("%29", ")");
-    return str;
-}
 
 void WebServerModule::setRelayState(bool state) {
     relayState = state;

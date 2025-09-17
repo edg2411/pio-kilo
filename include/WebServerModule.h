@@ -3,12 +3,13 @@
 
 #include <ETH.h>
 #include <WiFi.h>
+#include <ESPAsyncWebServer.h>
 #include <vector>
 #include <String>
 
 class WebServerModule {
 private:
-    WiFiServer* server;
+    AsyncWebServer* server;
     int relayPin;
     int ledPin;
     bool relayState;
@@ -30,23 +31,22 @@ private:
     bool validateSession(String token);
     
     // Request handling
-    void handleLogin(WiFiClient& client, String request);
-    void handleControl(WiFiClient& client, String request);
-    void handleLogout(WiFiClient& client);
-    void handleRoot(WiFiClient& client, String request);
+    void handleRoot(AsyncWebServerRequest *request);
+    void handleLogin(AsyncWebServerRequest *request);
+    void handleControl(AsyncWebServerRequest *request);
+    void handleLogout(AsyncWebServerRequest *request);
+    void handleOpen(AsyncWebServerRequest *request);
+    void handleClose(AsyncWebServerRequest *request);
     
     // Utility
     String getContentType(String filename);
-    String urlDecode(String str);
-    void parseFormData(String data, String& username, String& password);
 
 public:
     WebServerModule(int port = 80, int relayPin = 15, int ledPin = 14);
     ~WebServerModule();
-    
+
     void begin();
-    void handleClient();
-    
+
     // Relay control
     void setRelayState(bool state);
     bool getRelayState();
