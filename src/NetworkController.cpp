@@ -3,6 +3,7 @@
 #include "EthernetModule.h"
 #include "LTEModule.h"
 #include "board.h"
+#include <ESPmDNS.h>
 
 NetworkController* NetworkController::instance = nullptr;
 
@@ -168,6 +169,27 @@ void NetworkController::setLTEAPN(const String& apn, const String& user, const S
     }
 }
 
+static bool mdnsStarted = false;
+
+static void setupMDNS(const char* hostname) {
+    // Close any existing mDNS
+    MDNS.end();
+
+    // Try to start mDNS with our hostname
+    if (MDNS.begin(hostname)) {
+        Serial.print("mDNS responder started - device accessible at ");
+        Serial.print(hostname);
+        Serial.println(".local");
+
+        // Remove service to avoid potential conflicts with ArduinoOTA
+        // MDNS.addService("http", "tcp", 80);
+        mdnsStarted = true;
+    } else {
+        Serial.println("Failed to start mDNS responder");
+        mdnsStarted = false;
+    }
+}
+
 void NetworkController::networkEventHandler(arduino_event_id_t event, arduino_event_info_t info) {
     if (!instance) return;
 
@@ -184,6 +206,8 @@ void NetworkController::networkEventHandler(arduino_event_id_t event, arduino_ev
             char macStr[18];
             sprintf(macStr, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
             Serial.println("Ethernet MAC: " + String(macStr));
+            // Setup mDNS
+            setupMDNS("esp32-relay");
             break;
         case ARDUINO_EVENT_ETH_DISCONNECTED:
             instance->state = DISCONNECTED;

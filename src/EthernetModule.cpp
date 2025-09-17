@@ -35,9 +35,7 @@ bool EthernetModule::connect() {
     if (connected) return true;
     SPI.begin(sck, miso, mosi, cs);
     ETH.begin(ETHERNET_PHY_TYPE, addr, cs, irq, rst, SPI);
-    // Set hostname for mDNS
-    String hostname = ConfigLoader::getEthernetHostname();
-    ETH.setHostname(hostname.c_str());
+    // Hostname will be set via mDNS in NetworkController
     if (staticIPEnabled) {
         ETH.config(ip, gateway, subnet, dns1, dns2);
     }
