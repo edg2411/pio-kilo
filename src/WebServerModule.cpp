@@ -81,33 +81,24 @@ void WebServerModule::handleLogin(AsyncWebServerRequest *request) {
 }
 
 void WebServerModule::handleControl(AsyncWebServerRequest *request) {
-    Serial.println("=== CONTROL REQUEST ===");
-    Serial.println("Session token: " + sessionToken);
-
+    // Reduced logging to prevent Serial buffer issues
     // Check authentication
     bool isAuthenticated = false;
     String sessionParam = "";
 
     if (request->method() == HTTP_GET) {
-        // For GET requests, check URL parameters
         if (request->hasParam("session")) {
             sessionParam = request->getParam("session")->value();
         }
-        Serial.println("GET session param: '" + sessionParam + "'");
         isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
     } else if (request->method() == HTTP_POST) {
-        // For POST requests, check form data
         if (request->hasParam("session", true)) {
             sessionParam = request->getParam("session", true)->value();
         }
-        Serial.println("POST session param: '" + sessionParam + "'");
         isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
     }
 
-    Serial.println("Authentication result: " + String(isAuthenticated ? "SUCCESS" : "FAILED"));
-
     if (!isAuthenticated) {
-        Serial.println("Redirecting to login");
         request->redirect("/");
         return;
     }
@@ -116,18 +107,9 @@ void WebServerModule::handleControl(AsyncWebServerRequest *request) {
     if (request->method() == HTTP_POST) {
         if (request->hasParam("action", true)) {
             String action = request->getParam("action", true)->value();
-            if (action == "open") {
-                Serial.println("Opening door");
-                setRelayState(true);
-            } else if (action == "close") {
-                Serial.println("Closing door");
-                setRelayState(false);
-            }
+            setRelayState(action == "open");
         }
     }
-
-    // Show control page
-    Serial.println("Serving control page");
     request->send(200, "text/html", getControlPage());
 }
 
@@ -265,7 +247,8 @@ void WebServerModule::setRelayState(bool state) {
     relayState = state;
     digitalWrite(relayPin, state ? HIGH : LOW);
     digitalWrite(ledPin, state ? HIGH : LOW);
-    Serial.println("Door " + String(state ? "opened" : "closed"));
+    // Minimal logging
+    Serial.println("Relay: " + String(state ? "ON" : "OFF"));
 }
 
 bool WebServerModule::getRelayState() {

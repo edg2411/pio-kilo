@@ -19,9 +19,6 @@ void IRAM_ATTR buttonISR() {
     if (now - lastButtonPress > debounceDelay) {
         buttonPressed = true;
         lastButtonPress = now;
-        Serial.println("BUTTON INTERRUPT: Triggered at " + String(now));
-    } else {
-        Serial.println("BUTTON INTERRUPT: Ignored (debounce) at " + String(now));
     }
 }
 
@@ -115,9 +112,8 @@ void loop() {
         // Update internal state to match
         webServer->setRelayState(newState);
 
-        Serial.println("Button: Hardware was " + String(currentHardwareState ? "HIGH" : "LOW") +
-                      ", toggled to " + String(newState ? "HIGH" : "LOW") +
-                      " (" + String(newState ? "OPEN" : "CLOSED") + ")");
+        // Reduced logging to prevent buffer overflow
+        Serial.println("Button toggled to " + String(newState ? "OPEN" : "CLOSED"));
     }
 
     delay(1);  // Very short delay
