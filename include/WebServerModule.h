@@ -9,6 +9,8 @@
 #include <sys/time.h>
 #include <vector>
 #include <String>
+#include <LittleFS.h>
+#include <ArduinoJson.h>
 
 struct LogEntry {
     String timestamp;
@@ -20,6 +22,7 @@ private:
     AsyncWebServer* server;
     AsyncWebSocket* ws;
     std::vector<LogEntry> logs;
+    const char* LOGS_FILE = "/logs.json";
     int relayPin;
     int ledPin;
     bool relayState;
@@ -32,7 +35,9 @@ private:
     // HTML templates
     String getLoginPage(bool error = false);
     String getControlPage();
+    String getLogsPage();
     String getLogsHTML();
+    String getAllLogsHTML();
     String getHeader();
     String getFooter();
     
@@ -45,6 +50,7 @@ private:
     void handleRoot(AsyncWebServerRequest *request);
     void handleLogin(AsyncWebServerRequest *request);
     void handleControl(AsyncWebServerRequest *request);
+    void handleLogsPage(AsyncWebServerRequest *request);
     void handleLogout(AsyncWebServerRequest *request);
     void handleOpen(AsyncWebServerRequest *request);
     void handleClose(AsyncWebServerRequest *request);
@@ -64,6 +70,8 @@ public:
     // Logging
     void addLog(String action);
     void sendLogToClients(LogEntry log);
+    void loadLogsFromFile();
+    void saveLogsToFile();
 
     // WebSocket
     void sendButtonEvent();

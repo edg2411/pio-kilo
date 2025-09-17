@@ -7,6 +7,14 @@ WebServerModule::WebServerModule(int port, int relayPin, int ledPin) : relayStat
     server = new AsyncWebServer(port);
     ws = new AsyncWebSocket("/ws");
     sessionToken = "";
+
+    // Initialize LittleFS and load logs
+    if (!LittleFS.begin()) {
+        Serial.println("LittleFS mount failed");
+    } else {
+        loadLogsFromFile();
+        Serial.printf("Loaded %d logs from file\n", logs.size());
+    }
 }
 
 WebServerModule::~WebServerModule() {
@@ -34,6 +42,10 @@ void WebServerModule::begin() {
 
     server->on("/logout", HTTP_GET, [this](AsyncWebServerRequest *request) {
         handleLogout(request);
+    });
+
+    server->on("/logs", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        handleLogsPage(request);
     });
 
     server->on("/open", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -131,6 +143,24 @@ void WebServerModule::handleControl(AsyncWebServerRequest *request) {
     request->send(200, "text/html", getControlPage());
 }
 
+void WebServerModule::handleLogsPage(AsyncWebServerRequest *request) {
+    // Check authentication
+    bool isAuthenticated = false;
+    String sessionParam = "";
+
+    if (request->hasParam("session")) {
+        sessionParam = request->getParam("session")->value();
+        isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
+    }
+
+    if (!isAuthenticated) {
+        request->redirect("/");
+        return;
+    }
+
+    request->send(200, "text/html", getLogsPage());
+}
+
 void WebServerModule::handleLogout(AsyncWebServerRequest *request) {
     sessionToken = "";
     request->redirect("/");
@@ -205,6 +235,10 @@ String WebServerModule::getControlPage() {
     html += getLogsHTML();
     html += "</div>";
 
+    html += "<div class='navigation'>";
+    html += "<a href='/logs?session=" + sessionToken + "' class='btn btn-info'>Ver Historial Completo</a>";
+    html += "</div>";
+
     html += "<div class='logout'>";
     html += "<a href='/logout' class='btn btn-secondary'>Salir</a>";
     html += "</div>";
@@ -251,10 +285,61 @@ String WebServerModule::getControlPage() {
     return html;
 }
 
+String WebServerModule::getLogsPage() {
+    String html = getHeader();
+    html += "<div class='logs-container'>";
+    html += "<h1>Historial Completo</h1>";
+
+    // Navigation
+    html += "<div class='navigation'>";
+    html += "<a href='/control?session=" + sessionToken + "' class='btn btn-secondary' style='text-decoration: none;'>Volver al Control</a>";
+    html += "</div>";
+
+    // Stats
+    html += "<div class='stats'>";
+    html += "<p>Total de registros: " + String(logs.size()) + "</p>";
+    String lastUpdate = "Nunca";
+    if (!logs.empty()) {
+        String ts = logs.back().timestamp;
+        // Check if timestamp looks valid (not 1969/1970)
+        if (ts.startsWith("1969") || ts.startsWith("1970")) {
+            lastUpdate = "Esperando sincronizacion NTP";
+        } else {
+            lastUpdate = ts;
+        }
+    }
+    html += "<p>Ultima actualizacion: " + lastUpdate + "</p>";
+    html += "</div>";
+
+    // Logs table
+    html += "<div class='logs-section'>";
+    html += "<h2>Historial de Acciones</h2>";
+    html += getAllLogsHTML();
+    html += "</div>";
+
+    html += "</div>";
+    html += getFooter();
+    return html;
+}
+
 String WebServerModule::getLogsHTML() {
     String html = "<table id='logTable'><thead><tr><th>Fecha y Hora</th><th>Accion</th></tr></thead><tbody>";
-    for (auto it = logs.rbegin(); it != logs.rend(); ++it) {
-        html += "<tr><td>" + it->timestamp + "</td><td>" + it->action + "</td></tr>";
+
+    // Show last 10 logs on control page (most recent first)
+    size_t startIndex = (logs.size() > 10) ? (logs.size() - 10) : 0;
+
+    for (size_t i = logs.size(); i > startIndex; --i) {
+        html += "<tr><td>" + logs[i-1].timestamp + "</td><td>" + logs[i-1].action + "</td></tr>";
+    }
+
+    html += "</tbody></table>";
+    return html;
+}
+
+String WebServerModule::getAllLogsHTML() {
+    String html = "<table><thead><tr><th>Fecha y Hora</th><th>Accion</th></tr></thead><tbody>";
+    for (const auto& log : logs) {
+        html += "<tr><td>" + log.timestamp + "</td><td>" + log.action + "</td></tr>";
     }
     html += "</tbody></table>";
     return html;
@@ -331,12 +416,79 @@ void WebServerModule::addLog(String action) {
     if (logs.size() > 100) {
         logs.erase(logs.begin());
     }
+    // Save to file
+    saveLogsToFile();
+    // Send to WebSocket clients
     sendLogToClients(log);
 }
 
 void WebServerModule::sendLogToClients(LogEntry log) {
     String message = "log:" + log.timestamp + "," + log.action;
     ws->textAll(message);
+}
+
+void WebServerModule::loadLogsFromFile() {
+    if (!LittleFS.exists(LOGS_FILE)) {
+        Serial.println("No logs file found, starting fresh");
+        return;
+    }
+
+    File file = LittleFS.open(LOGS_FILE, "r");
+    if (!file) {
+        Serial.println("Failed to open logs file for reading");
+        return;
+    }
+
+    // Check file size
+    size_t fileSize = file.size();
+    if (fileSize > 10000) { // 10KB limit
+        Serial.println("Logs file too large, starting fresh");
+        file.close();
+        return;
+    }
+
+    DynamicJsonDocument doc(10240); // 10KB
+    DeserializationError error = deserializeJson(doc, file);
+    file.close();
+
+    if (error) {
+        Serial.printf("Failed to parse logs file: %s\n", error.c_str());
+        return;
+    }
+
+    JsonArray array = doc.as<JsonArray>();
+    logs.clear();
+
+    for (JsonObject logObj : array) {
+        String timestamp = logObj["timestamp"];
+        String action = logObj["action"];
+        logs.push_back({timestamp, action});
+    }
+
+    Serial.printf("Successfully loaded %d logs from file\n", logs.size());
+}
+
+void WebServerModule::saveLogsToFile() {
+    DynamicJsonDocument doc(10240);
+    JsonArray array = doc.to<JsonArray>();
+
+    for (const auto& log : logs) {
+        JsonObject logObj = array.createNestedObject();
+        logObj["timestamp"] = log.timestamp;
+        logObj["action"] = log.action;
+    }
+
+    File file = LittleFS.open(LOGS_FILE, "w");
+    if (!file) {
+        Serial.println("Failed to open logs file for writing");
+        return;
+    }
+
+    if (serializeJson(doc, file) == 0) {
+        Serial.println("Failed to write logs to file");
+    }
+
+    file.close();
 }
 
 void WebServerModule::sendButtonEvent() {
