@@ -7,6 +7,7 @@ WebServerModule::WebServerModule(int port, int relayPin, int ledPin) : relayStat
     server = new AsyncWebServer(port);
     ws = new AsyncWebSocket("/ws");
     sessionToken = "";
+    buzzer = new BuzzerModule();
 
     // Initialize LittleFS and load configurations
     if (!LittleFS.begin()) {
@@ -77,6 +78,11 @@ void WebServerModule::begin() {
     // Setup NTP with Argentina timezone
     configTzTime("ART3", "pool.ntp.org");
     Serial.println("NTP configured");
+}
+
+void WebServerModule::update() {
+    // Update buzzer for non-blocking beeps
+    buzzer->update();
 }
 
 
@@ -823,6 +829,14 @@ void WebServerModule::setRelayState(bool state) {
     relayState = state;
     digitalWrite(relayPin, state ? HIGH : LOW);
     digitalWrite(ledPin, state ? HIGH : LOW);
+
+    // Buzzer signals for door events
+    if (state) {
+        buzzer->beepDoorOpen();
+    } else {
+        buzzer->beepDoorClose();
+    }
+
     // Log the action
     String action = state ? "ABRIR" : "CERRAR";
     addLog(action);

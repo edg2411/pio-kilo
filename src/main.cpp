@@ -4,9 +4,11 @@
 #include "ConfigLoader.h"
 #include "board.h"
 #include "WebServerModule.h"
+#include "BuzzerModule.h"
 
 NetworkController* netManager;
 WebServerModule* webServer;
+BuzzerModule* buzzer;
 
 // Button interrupt handling
 volatile bool buttonPressed = false;
@@ -92,10 +94,20 @@ void setup() {
     // Start web server
     webServer = new WebServerModule(80, RELAY_PIN, LED_PIN);
     webServer->begin();
+
+    // Initialize buzzer
+    buzzer = new BuzzerModule();
+
+    // Signal setup completion
+    buzzer->beepSetupComplete();
 }
 
 void loop() {
     netManager->update();
+
+    // Update buzzer for non-blocking beeps
+    buzzer->update();
+    webServer->update();
 
     // Handle button press (interrupt-based)
     if (buttonPressed) {

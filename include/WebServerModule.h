@@ -11,6 +11,7 @@
 #include <String>
 #include <LittleFS.h>
 #include <ArduinoJson.h>
+#include "BuzzerModule.h"
 
 struct LogEntry {
     String timestamp;
@@ -27,6 +28,7 @@ private:
     int ledPin;
     bool relayState;
     String sessionToken;
+    BuzzerModule* buzzer;
 
     // Configurable user credentials
     String USERNAME = "admin";
@@ -71,6 +73,7 @@ public:
     ~WebServerModule();
 
     void begin();
+    void update();  // Update buzzer and other components
 
     // NTP
     String getCurrentTime();
