@@ -66,6 +66,10 @@ void WebServerModule::begin() {
         handleClose(request);
     });
 
+    server->on("/toggle", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        handleToggle(request);
+    });
+
     // WebSocket setup
     ws->onEvent([this](AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len){
         // WebSocket event handling - no logging to reduce noise
@@ -314,6 +318,23 @@ void WebServerModule::handleClose(AsyncWebServerRequest *request) {
     request->redirect("/control?session=" + sessionToken);
 }
 
+void WebServerModule::handleToggle(AsyncWebServerRequest *request) {
+    // Check authentication
+    bool isAuthenticated = false;
+    if (request->hasParam("session")) {
+        String sessionParam = request->getParam("session")->value();
+        isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
+    }
+
+    if (!isAuthenticated) {
+        request->redirect("/");
+        return;
+    }
+
+    toggleRelayPulse();
+    request->redirect("/control?session=" + sessionToken);
+}
+
 String WebServerModule::getLoginPage(bool error) {
     String html = getHeader();
     html += "<div class='login-container'>";
@@ -367,6 +388,8 @@ String WebServerModule::getControlPage() {
     html += "<input type='hidden' name='action' value='close'>";
     html += "<button type='submit' class='btn btn-danger'>CERRAR</button>";
     html += "</form>";
+
+    html += "<a href='/toggle?session=" + sessionToken + "' class='btn btn-warning' style='margin-left: 20px;'>TOGGLE LOCK</a>";
     html += "</div>";
 
     html += "<div class='logs'>";
@@ -844,4 +867,17 @@ void WebServerModule::setRelayState(bool state) {
 
 bool WebServerModule::getRelayState() {
     return relayState;
+}
+
+void WebServerModule::toggleRelayPulse() {
+    // Send a 200ms pulse to toggle the electronic lock
+    digitalWrite(relayPin, HIGH);
+    delay(200);
+    digitalWrite(relayPin, LOW);
+
+    // Buzzer feedback for toggle action
+    buzzer->beepToggle();
+
+    // Log the toggle action
+    addLog("TOGGLE");
 }

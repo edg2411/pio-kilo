@@ -64,6 +64,7 @@ private:
     void handleLogout(AsyncWebServerRequest *request);
     void handleOpen(AsyncWebServerRequest *request);
     void handleClose(AsyncWebServerRequest *request);
+    void handleToggle(AsyncWebServerRequest *request);
     
     // Utility
     String getContentType(String filename);
@@ -96,6 +97,7 @@ public:
     // Relay control
     void setRelayState(bool state);
     bool getRelayState();
+    void toggleRelayPulse();
 };
 
 #endif // WEB_SERVER_MODULE_H

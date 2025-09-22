@@ -26,6 +26,10 @@ void BuzzerModule::beepDoorClose() {
     startBeepSequence(1, true, false);   // 1 long beep
 }
 
+void BuzzerModule::beepToggle() {
+    startBeepSequence(1, false, false);  // 1 short beep
+}
+
 void BuzzerModule::update() {
     if (!isBeeping) return;
 

@@ -13,6 +13,7 @@ public:
     void beepSetupComplete();  // 3 short fast beeps
     void beepDoorOpen();       // 2 short fast beeps
     void beepDoorClose();      // 2 short beeps + 1 longer beep
+    void beepToggle();         // 1 short beep for toggle action
 
     // Update function to be called in loop for non-blocking operation
     void update();
