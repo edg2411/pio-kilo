@@ -372,24 +372,26 @@ String WebServerModule::getControlPage() {
     html += "<div class='control-container'>";
     html += "<h1>Control de acceso</h1>";
     html += "<h2>Sucursal 001</h2>";
-    html += "<div class='status'>";
-    html += "<h2>Estado: <span class='" + String(relayState ? "status-open" : "status-closed") + "'>" + String(relayState ? "ABIERTO" : "CERRADO") + "</span></h2>";
-    html += "</div>";
-    
+    // Commented out for demo with electronic lock
+    // html += "<div class='status'>";
+    // html += "<h2>Estado: <span class='" + String(relayState ? "status-open" : "status-closed") + "'>" + String(relayState ? "ABIERTO" : "CERRADO") + "</span></h2>";
+    // html += "</div>";
+
     html += "<div class='controls'>";
-    html += "<form method='POST' action='/control' style='display: inline;'>";
-    html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
-    html += "<input type='hidden' name='action' value='open'>";
-    html += "<button type='submit' class='btn btn-success'>ABRIR</button>";
-    html += "</form>";
+    // Commented out old buttons for demo
+    // html += "<form method='POST' action='/control' style='display: inline;'>";
+    // html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
+    // html += "<input type='hidden' name='action' value='open'>";
+    // html += "<button type='submit' class='btn btn-success'>ABRIR</button>";
+    // html += "</form>";
 
-    html += "<form method='POST' action='/control' style='display: inline; margin-left: 20px;'>";
-    html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
-    html += "<input type='hidden' name='action' value='close'>";
-    html += "<button type='submit' class='btn btn-danger'>CERRAR</button>";
-    html += "</form>";
+    // html += "<form method='POST' action='/control' style='display: inline; margin-left: 20px;'>";
+    // html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
+    // html += "<input type='hidden' name='action' value='close'>";
+    // html += "<button type='submit' class='btn btn-danger'>CERRAR</button>";
+    // html += "</form>";
 
-    html += "<a href='/toggle?session=" + sessionToken + "' class='btn btn-warning' style='margin-left: 20px;'>TOGGLE LOCK</a>";
+    html += "<a href='/toggle?session=" + sessionToken + "' class='btn btn-success'>ABRIR</a>";
     html += "</div>";
 
     html += "<div class='logs'>";
@@ -879,5 +881,5 @@ void WebServerModule::toggleRelayPulse() {
     buzzer->beepToggle();
 
     // Log the toggle action
-    addLog("TOGGLE");
+    addLog("APERTURA");
 }
