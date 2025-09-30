@@ -717,7 +717,7 @@ String WebServerModule::getLogsPage(String selectedDevice) {
 
     // Download button
     html += "<div class='download-section'>";
-    html += "<a href='/download/logs/" + selectedDevice + "?session=" + sessionToken + "' class='btn btn-info'>Descargar Logs</a>";
+    html += "<a href='/download/logs/" + selectedDevice + "?session=" + sessionToken + "' class='btn btn-info'>Descargar</a>";
     html += "</div>";
 
     // Logs table

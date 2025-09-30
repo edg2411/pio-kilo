@@ -1,15 +1,16 @@
-# ESP32 Remote Access Control System
+# ESP32 Multi-Device Access Control System
 
-A secure Ethernet-based remote access control system with integrated web server and real-time monitoring capabilities. Features WebSocket communication, NTP synchronization, comprehensive logging, and mDNS discovery for easy network access.
+A secure Ethernet-based remote access control system supporting multiple devices with integrated web server and real-time monitoring capabilities. Features WebSocket communication, NTP synchronization, device-specific logging, CSV export, and mDNS discovery for easy network access.
 
 ## 🚀 Features
 
 ### Core Functionality
 - **Ethernet Connectivity**: DHCP or static IP configuration with mDNS support
+- **Multi-Device Support**: Control multiple access points from single dashboard
+- **Device-Specific Logging**: Isolated activity logs per device (max 100 entries each)
 - **Web Server**: Built-in secure web interface with authentication
 - **Real-time Updates**: WebSocket integration for live status and log updates
 - **NTP Time Sync**: Accurate date/time synchronization with Argentina timezone
-- **Log History**: Comprehensive action logging with timestamps (max 100 entries)
 - **Relay Control**: Hardware relay operation with state monitoring
 - **Session Management**: Secure token-based authentication system
 - **Configuration Interface**: Web-based system configuration and user management
@@ -17,12 +18,23 @@ A secure Ethernet-based remote access control system with integrated web server 
 ### Web Interface Features
 - **Authentication**: Secure login with configurable user credentials
 - **Admin Fallback**: Always-available admin access (admin/admin123)
+- **Dashboard View**: Grid layout showing all devices with status indicators
+- **Device Control**: Individual control pages for each access point
+- **Vertical Navigation**: Fixed sidebar with Dashboard, Historial, Ajustes, Salir
 - **Real-time Updates**: Live door status and log updates via WebSocket
-- **Control Operations**: Web-based open/close/toggle relay operations
-- **Log History**: View recent actions with date/time stamps
+- **Control Operations**: Web-based open/close operations per device
+- **Log History**: Device-specific logs with CSV export functionality
 - **Network Configuration**: DHCP/static IP settings via web interface
 - **User Management**: Change credentials through web interface
 - **Responsive Design**: Mobile-friendly interface in Spanish
+
+### Multi-Device Features
+- **Device Dashboard**: Visual overview of all access control devices
+- **Status Monitoring**: Online/offline indicators for each device
+- **Isolated Control**: Each device operates independently
+- **Device-Specific Logs**: Separate activity history per device
+- **CSV Export**: Download logs for any device in spreadsheet format
+- **Scalable Design**: Easy to add more devices to the system
 
 ### Security Features
 - **Session Tokens**: Secure authentication with auto-expiring sessions
@@ -37,7 +49,10 @@ A secure Ethernet-based remote access control system with integrated web server 
 │   ├── config.json          # Main configuration file
 │   ├── user_config.json     # User credentials (runtime)
 │   ├── network_config.json  # Network settings (runtime)
-│   └── logs.json           # Action log history (runtime)
+│   └── logs_*.json         # Device-specific log files (runtime)
+│       ├── logs_real.json  # Real device (Controlador 1) logs
+│       ├── logs_mock1.json # Mock device (Controlador 2) logs
+│       └── logs_mock2.json # Mock device (Controlador 3) logs
 ├── include/                 # Header files
 │   ├── board.h             # Hardware pin definitions
 │   ├── ConfigLoader.h      # JSON configuration loader
@@ -60,20 +75,22 @@ A secure Ethernet-based remote access control system with integrated web server 
 ## 🔗 API Endpoints
 
 ### Authentication Endpoints
-- `GET /` - Login page (redirects to /control if authenticated)
+- `GET /` - Login page (redirects to /dashboard if authenticated)
 - `POST /login` - User authentication
 - `GET /logout` - Session termination
 
-### Control Endpoints
-- `GET /control` - Main control interface (requires authentication)
-- `POST /control` - Relay control operations (open/close/toggle)
-- `GET /open` - Direct relay open (requires authentication)
-- `GET /close` - Direct relay close (requires authentication)
+### Dashboard & Control Endpoints
+- `GET /dashboard` - Main dashboard showing all devices (requires authentication)
+- `GET /control?device={id}` - Device-specific control interface (requires authentication)
+- `POST /control` - Relay control operations (open/close) with device parameter
+- `GET /open` - Direct relay open (legacy, requires authentication)
+- `GET /close` - Direct relay close (legacy, requires authentication)
 
 ### Configuration Endpoints
 - `GET /config` - System configuration page (requires authentication)
 - `POST /config` - Update system settings (network/user credentials)
-- `GET /logs` - View complete log history (requires authentication)
+- `GET /logs?device={id}` - View device-specific log history (requires authentication)
+- `GET /download/logs/{deviceId}` - Download device logs as CSV (requires authentication)
 
 ### WebSocket Endpoint
 - `WS /ws` - Real-time updates for status and logs
@@ -137,16 +154,30 @@ A secure Ethernet-based remote access control system with integrated web server 
 - **Modifiable** via web interface
 - **Persists** across reboots
 
-#### Log History (data/logs.json)
+#### Device-Specific Log Files (data/logs_{deviceId}.json)
 ```json
 [
-  {"timestamp": "2025-01-17 14:30:15", "action": "ABRIR"},
-  {"timestamp": "2025-01-17 14:31:20", "action": "CERRAR"}
+  {
+    "timestamp": "2025-01-17 14:30:15",
+    "action": "ABRIR",
+    "deviceId": "real",
+    "deviceName": "Controlador 1",
+    "location": "Sucursal 001"
+  },
+  {
+    "timestamp": "2025-01-17 14:31:20",
+    "action": "CERRAR",
+    "deviceId": "real",
+    "deviceName": "Controlador 1",
+    "location": "Sucursal 001"
+  }
 ]
 ```
-- **Auto-generated** by system
-- **Max 100 entries** (oldest removed automatically)
-- **NTP synchronized** timestamps
+- **Device-specific files**: `logs_real.json`, `logs_mock1.json`, etc.
+- **Auto-generated** by system per device
+- **Max 100 entries** per device (oldest removed automatically)
+- **NTP synchronized** timestamps with device metadata
+- **CSV export** available for each device
 
 ## 🛠️ Setup Instructions
 
@@ -222,11 +253,14 @@ http://[configured-ip]  (Static IP mode)
 - **Static IP**: `http://[configured-ip]`
 
 ### Web Interface Features
+- **Dashboard Overview**: Grid view of all devices with status indicators
+- **Device Control**: Individual control pages for each access point
+- **Vertical Navigation**: Fixed sidebar navigation (Dashboard, Historial, Ajustes, Salir)
 - **Real-time Status**: Live door status updates via WebSocket
-- **Log History**: View recent actions with NTP timestamps
+- **Device Logs**: View and download device-specific activity history
+- **CSV Export**: Download logs in spreadsheet format
 - **Network Config**: DHCP/static IP configuration
 - **User Management**: Change credentials securely
-- **Relay Control**: Web-based open/close/toggle operations
 
 ### Serial Output Monitoring
 The device provides detailed serial output:
@@ -343,4 +377,4 @@ For issues and questions:
 
 ---
 
-**Secure Remote Access Control System - Ready for Production! 🔐⚡**
+**Multi-Device Access Control System - Production Ready! 🔐⚡📊**
