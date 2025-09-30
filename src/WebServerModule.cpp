@@ -9,6 +9,12 @@ WebServerModule::WebServerModule(int port, int relayPin, int ledPin) : relayStat
     sessionToken = "";
     buzzer = new BuzzerModule();
 
+    // Initialize devices
+    devices.push_back({"real", "Controlador Principal", "online", "Sucursal 001"});
+    devices.push_back({"mock1", "Controlador Secundario", "online", "Sucursal 002"});
+    devices.push_back({"mock2", "Controlador Terciario", "offline", "Sucursal 003"});
+    devices.push_back({"mock3", "Controlador Cuarto", "online", "Sucursal 004"});
+
     // Initialize LittleFS and load configurations
     if (!LittleFS.begin()) {
         Serial.println("LittleFS mount failed");
@@ -36,6 +42,10 @@ void WebServerModule::begin() {
 
     server->on("/control", HTTP_GET, [this](AsyncWebServerRequest *request) {
         handleControl(request);
+    });
+
+    server->on("/dashboard", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        handleDashboard(request);
     });
 
     server->on("/control", HTTP_POST, [this](AsyncWebServerRequest *request) {
@@ -114,13 +124,31 @@ void WebServerModule::handleLogin(AsyncWebServerRequest *request) {
     if (authenticate(username, password)) {
         sessionToken = generateSessionToken();
         Serial.println("Login successful");
-        // Redirect to control page with session
-        request->redirect("/control?session=" + sessionToken);
+        // Redirect to dashboard page with session
+        request->redirect("/dashboard?session=" + sessionToken);
     } else {
         Serial.println("Login failed - invalid credentials");
         // Show login page with error
         request->send(200, "text/html", getLoginPage(true));
     }
+}
+
+void WebServerModule::handleDashboard(AsyncWebServerRequest *request) {
+    // Check authentication
+    bool isAuthenticated = false;
+    String sessionParam = "";
+
+    if (request->hasParam("session")) {
+        sessionParam = request->getParam("session")->value();
+        isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
+    }
+
+    if (!isAuthenticated) {
+        request->redirect("/");
+        return;
+    }
+
+    request->send(200, "text/html", getDashboardPage());
 }
 
 void WebServerModule::handleControl(AsyncWebServerRequest *request) {
@@ -146,20 +174,26 @@ void WebServerModule::handleControl(AsyncWebServerRequest *request) {
         return;
     }
 
+    // Get device parameter
+    String deviceId = "real"; // default
+    if (request->hasParam("device")) {
+        deviceId = request->getParam("device")->value();
+    }
+
     // Handle POST requests for relay control
     if (request->method() == HTTP_POST) {
         if (request->hasParam("action", true)) {
             String action = request->getParam("action", true)->value();
             if (action == "open") {
-                setRelayState(true);
+                setRelayState(true, deviceId);
             } else if (action == "close") {
-                setRelayState(false);
+                setRelayState(false, deviceId);
             } else if (action == "toggle") {
-                setRelayState(!getRelayState());
+                setRelayState(!getRelayState(), deviceId);
             }
         }
     }
-    request->send(200, "text/html", getControlPage());
+    request->send(200, "text/html", getControlPage(deviceId));
 }
 
 void WebServerModule::handleLogsPage(AsyncWebServerRequest *request) {
@@ -340,11 +374,11 @@ String WebServerModule::getLoginPage(bool error) {
     html += "<div class='login-container'>";
     html += "<h1>Control de acceso</h1>";
     html += "<h2>Sucursal 001</h2>";
-    
+
     if (error) {
         html += "<div class='error'>Invalid username or password</div>";
     }
-    
+
     html += "<form method='POST' action='/login'>";
     html += "<div class='form-group'>";
     html += "<label for='username'>Usuario:</label>";
@@ -361,17 +395,89 @@ String WebServerModule::getLoginPage(bool error) {
     return html;
 }
 
-String WebServerModule::getControlPage() {
-    // CRITICAL: Only read hardware state - NEVER write to it
-    bool actualHardwareState = digitalRead(relayPin);
+String WebServerModule::getDashboardPage() {
+    String html = getHeader();
+    html += "<div class='dashboard-container'>";
+    html += "<h1>Panel de Control Principal</h1>";
+    html += "<h2>Sistema de Control de Acceso</h2>";
 
-    // Update internal state to match hardware for UI display
-    relayState = actualHardwareState;
+    html += "<div class='devices-grid'>";
+    for (const auto& device : devices) {
+        String statusClass = (device.status == "online") ? "status-online" : "status-offline";
+        String statusText = (device.status == "online") ? "Online" : "Offline";
+
+        html += "<div class='device-card'>";
+        html += "<h3>" + device.name + "</h3>";
+        html += "<p class='location'>" + device.location + "</p>";
+        html += "<div class='device-footer'>";
+        html += "<div class='status " + statusClass + "'>" + statusText + "</div>";
+        if (device.status == "online") {
+            html += "<a href='/control?session=" + sessionToken + "&device=" + device.id + "' class='btn btn-primary btn-small'>Controlar</a>";
+        } else {
+            html += "<span class='btn btn-secondary btn-small disabled'>No disponible</span>";
+        }
+        html += "</div>";
+        html += "</div>";
+    }
+    html += "</div>";
+
+    html += "<div class='navigation'>";
+    html += "<a href='/logs?session=" + sessionToken + "' class='btn btn-info'>Ver Historial Completo</a>";
+    html += "<a href='/config?session=" + sessionToken + "' class='btn btn-warning' style='margin-left: 10px;'>Ajuste</a>";
+    html += "</div>";
+
+    html += "<div class='logout'>";
+    html += "<a href='/logout' class='btn btn-secondary'>Salir</a>";
+    html += "</div>";
+    html += "</div>";
+
+    // Add CSS for dashboard
+    html += "<style>";
+    html += ".devices-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 30px 0; }";
+    html += ".device-card { border: 1px solid #ddd; border-radius: 10px; padding: 20px; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }";
+    html += ".device-card h3 { margin-top: 0; color: #333; }";
+    html += ".location { color: #666; font-size: 14px; margin: 5px 0 15px 0; }";
+    html += ".device-footer { display: flex; justify-content: space-between; align-items: center; }";
+    html += ".status { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; }";
+    html += ".status-online { background: #d4edda; color: #155724; }";
+    html += ".status-offline { background: #f8d7da; color: #721c24; }";
+    html += ".btn-small { padding: 6px 12px; font-size: 12px; }";
+    html += ".disabled { opacity: 0.6; cursor: not-allowed; }";
+    html += "</style>";
+
+    html += getFooter();
+    return html;
+}
+
+String WebServerModule::getControlPage(String deviceId) {
+    // Find device info
+    String deviceName = "Controlador Principal";
+    String deviceLocation = "Sucursal 001";
+    bool isRealDevice = (deviceId == "real");
+
+    for (const auto& device : devices) {
+        if (device.id == deviceId) {
+            deviceName = device.name;
+            deviceLocation = device.location;
+            break;
+        }
+    }
+
+    // CRITICAL: Only read hardware state for real device - NEVER write to it
+    if (isRealDevice) {
+        bool actualHardwareState = digitalRead(relayPin);
+        // Update internal state to match hardware for UI display
+        relayState = actualHardwareState;
+    }
 
     String html = getHeader();
     html += "<div class='control-container'>";
     html += "<h1>Control de acceso</h1>";
-    html += "<h2>Sucursal 001</h2>";
+    html += "<h2>" + deviceLocation + "</h2>";
+
+    if (!isRealDevice) {
+        html += "<div class='demo-warning'>MODO DEMO - Control simulado</div>";
+    }
     // Commented out for demo with electronic lock
     // html += "<div class='status'>";
     // html += "<h2>Estado: <span class='" + String(relayState ? "status-open" : "status-closed") + "'>" + String(relayState ? "ABIERTO" : "CERRADO") + "</span></h2>";
@@ -405,7 +511,7 @@ String WebServerModule::getControlPage() {
     html += "</div>";
 
     html += "<div class='logout'>";
-    html += "<a href='/logout' class='btn btn-secondary'>Salir</a>";
+    html += "<a href='/dashboard?session=" + sessionToken + "' class='btn btn-secondary'>Volver</a>";
     html += "</div>";
     html += "</div>";
 
@@ -445,6 +551,11 @@ String WebServerModule::getControlPage() {
     html += "};";
     html += "ws.onclose = function() { console.log('WebSocket disconnected'); };";
     html += "</script>";
+
+    // Add CSS for demo warning
+    html += "<style>";
+    html += ".demo-warning { background: #fff3cd; color: #856404; padding: 10px; border-radius: 5px; margin: 20px 0; text-align: center; font-weight: bold; border: 1px solid #ffeaa7; }";
+    html += "</style>";
 
     html += getFooter();
     return html;
@@ -850,20 +961,27 @@ void WebServerModule::sendButtonEvent() {
     ws->textAll("button_pressed");
 }
 
-void WebServerModule::setRelayState(bool state) {
-    relayState = state;
-    digitalWrite(relayPin, state ? HIGH : LOW);
-    digitalWrite(ledPin, state ? HIGH : LOW);
+void WebServerModule::setRelayState(bool state, String deviceId) {
+    bool isRealDevice = (deviceId == "real");
 
-    // Buzzer signals for door events
-    if (state) {
-        buzzer->beepDoorOpen();
-    } else {
-        buzzer->beepDoorClose();
+    if (isRealDevice) {
+        relayState = state;
+        digitalWrite(relayPin, state ? HIGH : LOW);
+        digitalWrite(ledPin, state ? HIGH : LOW);
+
+        // Buzzer signals for door events
+        if (state) {
+            buzzer->beepDoorOpen();
+        } else {
+            buzzer->beepDoorClose();
+        }
     }
 
-    // Log the action
+    // Log the action with device info
     String action = state ? "ABRIR" : "CERRAR";
+    if (!isRealDevice) {
+        action += " (DEMO - " + deviceId + ")";
+    }
     addLog(action);
 }
 

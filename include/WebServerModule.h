@@ -18,11 +18,19 @@ struct LogEntry {
     String action;
 };
 
+struct Device {
+    String id;
+    String name;
+    String status; // "online", "offline", "unknown"
+    String location;
+};
+
 class WebServerModule {
 private:
     AsyncWebServer* server;
     AsyncWebSocket* ws;
     std::vector<LogEntry> logs;
+    std::vector<Device> devices;
     const char* LOGS_FILE = "/logs.json";
     int relayPin;
     int ledPin;
@@ -40,7 +48,8 @@ private:
     
     // HTML templates
     String getLoginPage(bool error = false);
-    String getControlPage();
+    String getDashboardPage();
+    String getControlPage(String deviceId = "real");
     String getLogsPage();
     String getConfigPage();
     String getRestartPage();
@@ -57,6 +66,7 @@ private:
     // Request handling
     void handleRoot(AsyncWebServerRequest *request);
     void handleLogin(AsyncWebServerRequest *request);
+    void handleDashboard(AsyncWebServerRequest *request);
     void handleControl(AsyncWebServerRequest *request);
     void handleLogsPage(AsyncWebServerRequest *request);
     void handleConfigPage(AsyncWebServerRequest *request);
@@ -95,7 +105,7 @@ public:
     void sendButtonEvent();
 
     // Relay control
-    void setRelayState(bool state);
+    void setRelayState(bool state, String deviceId = "real");
     bool getRelayState();
     void toggleRelayPulse();
 };
