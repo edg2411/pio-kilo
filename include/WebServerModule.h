@@ -55,6 +55,7 @@ private:
     String getRestartPage();
     String getLogsHTML();
     String getAllLogsHTML();
+    String getNavbar();
     String getHeader();
     String getFooter();
     

@@ -10,10 +10,10 @@ WebServerModule::WebServerModule(int port, int relayPin, int ledPin) : relayStat
     buzzer = new BuzzerModule();
 
     // Initialize devices
-    devices.push_back({"real", "Controlador Principal", "online", "Sucursal 001"});
-    devices.push_back({"mock1", "Controlador Secundario", "online", "Sucursal 002"});
-    devices.push_back({"mock2", "Controlador Terciario", "offline", "Sucursal 003"});
-    devices.push_back({"mock3", "Controlador Cuarto", "online", "Sucursal 004"});
+    devices.push_back({"real", "Controlador 1", "online", "Sucursal 001"});
+    devices.push_back({"mock1", "Controlador 2", "online", "Sucursal 002"});
+    devices.push_back({"mock2", "Controlador 3", "offline", "Sucursal 003"});
+    devices.push_back({"mock3", "Controlador 4", "online", "Sucursal 004"});
 
     // Initialize LittleFS and load configurations
     if (!LittleFS.begin()) {
@@ -420,16 +420,9 @@ String WebServerModule::getDashboardPage() {
         html += "</div>";
     }
     html += "</div>";
-
-    html += "<div class='navigation'>";
-    html += "<a href='/logs?session=" + sessionToken + "' class='btn btn-info'>Ver Historial Completo</a>";
-    html += "<a href='/config?session=" + sessionToken + "' class='btn btn-warning' style='margin-left: 10px;'>Ajuste</a>";
     html += "</div>";
 
-    html += "<div class='logout'>";
-    html += "<a href='/logout' class='btn btn-secondary'>Salir</a>";
-    html += "</div>";
-    html += "</div>";
+    html += getNavbar();
 
     // Add CSS for dashboard
     html += "<style>";
@@ -505,14 +498,7 @@ String WebServerModule::getControlPage(String deviceId) {
     html += getLogsHTML();
     html += "</div>";
 
-    html += "<div class='navigation'>";
-    html += "<a href='/logs?session=" + sessionToken + "' class='btn btn-info'>Ver Historial Completo</a>";
-    html += "<a href='/config?session=" + sessionToken + "' class='btn btn-warning' style='margin-left: 10px;'>Ajuste</a>";
-    html += "</div>";
-
-    html += "<div class='logout'>";
-    html += "<a href='/dashboard?session=" + sessionToken + "' class='btn btn-secondary'>Volver</a>";
-    html += "</div>";
+    html += getNavbar();
     html += "</div>";
 
     // WebSocket client code
@@ -567,10 +553,7 @@ String WebServerModule::getLogsPage() {
     html += "<h1>Historial Completo</h1>";
     html += "<h2>Sucursal 001</h2>";
 
-    // Navigation
-    html += "<div class='navigation'>";
-    html += "<a href='/control?session=" + sessionToken + "' class='btn btn-secondary' style='text-decoration: none;'>Volver al Control</a>";
-    html += "</div>";
+    html += getNavbar();
 
     // Stats
     html += "<div class='stats'>";
@@ -627,10 +610,7 @@ String WebServerModule::getConfigPage() {
     html += "<div class='config-container'>";
     html += "<h1>Ajuste del Sistema</h1>";
 
-    // Navigation
-    html += "<div class='navigation'>";
-    html += "<a href='/control?session=" + sessionToken + "' class='btn btn-secondary' style='text-decoration: none;'>Volver al Control</a>";
-    html += "</div>";
+    html += getNavbar();
 
     // Success/Error messages
     if (sessionToken.length() > 0) {
@@ -703,13 +683,28 @@ String WebServerModule::getRestartPage() {
     return html;
 }
 
+String WebServerModule::getNavbar() {
+    String html = "<div class='navbar'>";
+    html += "<a href='/dashboard?session=" + sessionToken + "' class='nav-btn'>Dashboard</a>";
+    html += "<a href='/logs?session=" + sessionToken + "' class='nav-btn'>Historial</a>";
+    html += "<a href='/config?session=" + sessionToken + "' class='nav-btn'>Ajuste</a>";
+    html += "<a href='/logout' class='nav-btn nav-logout'>Salir</a>";
+    html += "</div>";
+    return html;
+}
+
 String WebServerModule::getHeader() {
     String html = "<!DOCTYPE html><html><head>";
     html += "<title>Control de Acceso</title>";
     html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
     html += "<style>";
-    html += "body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#f5f5f5;}";
-    html += ".login-container,.control-container{max-width:400px;margin:50px auto;padding:30px;background:white;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}";
+    html += "body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#f5f5f5;position:relative;}";
+    html += ".navbar{position:fixed;right:20px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px;z-index:1000;}";
+    html += ".nav-btn{display:block;padding:12px 20px;background:#007bff;color:white;text-decoration:none;border-radius:5px;text-align:center;font-size:14px;min-width:120px;}";
+    html += ".nav-btn:hover{background:#0056b3;}";
+    html += ".nav-logout{background:#dc3545;}";
+    html += ".nav-logout:hover{background:#c82333;}";
+    html += ".login-container,.control-container,.dashboard-container{max-width:800px;margin:50px auto;padding:30px;background:white;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}";
     html += "h1{text-align:center;color:#333;margin-bottom:30px;}";
     html += "h2{margin-bottom:20px;color:#555;}";
     html += ".form-group{margin-bottom:15px;}";
@@ -720,6 +715,8 @@ String WebServerModule::getHeader() {
     html += ".btn-success{background:#28a745;color:white;}";
     html += ".btn-danger{background:#dc3545;color:white;}";
     html += ".btn-secondary{background:#6c757d;color:white;}";
+    html += ".btn-info{background:#17a2b8;color:white;}";
+    html += ".btn-warning{background:#ffc107;color:black;}";
     html += ".status{text-align:center;margin:30px 0;}";
     html += ".status-open{color:#28a745;font-weight:bold;}";
     html += ".status-closed{color:#dc3545;font-weight:bold;}";
