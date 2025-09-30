@@ -29,7 +29,8 @@ class WebServerModule {
 private:
     AsyncWebServer* server;
     AsyncWebSocket* ws;
-    std::vector<LogEntry> logs;
+    std::vector<LogEntry> logs; // Legacy logs for backward compatibility
+    std::vector<LogEntry> currentDeviceLogs; // Currently loaded device logs
     std::vector<Device> devices;
     const char* LOGS_FILE = "/logs.json";
     int relayPin;
@@ -50,11 +51,12 @@ private:
     String getLoginPage(bool error = false);
     String getDashboardPage();
     String getControlPage(String deviceId = "real");
-    String getLogsPage();
+    String getLogsPage(String selectedDevice = "real");
     String getConfigPage();
     String getRestartPage();
     String getLogsHTML();
     String getAllLogsHTML();
+    String getDeviceLogsHTML(String deviceId);
     String getNavbar();
     String getHeader();
     String getFooter();
@@ -76,6 +78,7 @@ private:
     void handleOpen(AsyncWebServerRequest *request);
     void handleClose(AsyncWebServerRequest *request);
     void handleToggle(AsyncWebServerRequest *request);
+    void handleDownloadLogs(AsyncWebServerRequest *request);
     
     // Utility
     String getContentType(String filename);
@@ -91,10 +94,15 @@ public:
     String getCurrentTime();
 
     // Logging
-    void addLog(String action);
+    void addLog(String action); // Legacy function for backward compatibility
+    void addDeviceLog(String deviceId, String action);
     void sendLogToClients(LogEntry log);
-    void loadLogsFromFile();
-    void saveLogsToFile();
+    void loadLogsFromFile(); // Legacy function
+    void saveLogsToFile(); // Legacy function
+    void loadDeviceLogs(String deviceId);
+    void saveDeviceLogs(String deviceId);
+    String getDeviceLogFilename(String deviceId);
+    void migrateLegacyLogs();
 
     // Configuration
     void loadUserConfig();

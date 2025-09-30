@@ -19,9 +19,10 @@ WebServerModule::WebServerModule(int port, int relayPin, int ledPin) : relayStat
     if (!LittleFS.begin()) {
         Serial.println("LittleFS mount failed");
     } else {
-        loadLogsFromFile();
+        migrateLegacyLogs(); // Migrate old logs to device-specific files
+        loadDeviceLogs("real"); // Load real device logs by default
         loadUserConfig();
-        Serial.printf("Loaded %d logs and user config from file\n", logs.size());
+        Serial.printf("Loaded %d device logs and user config from file\n", currentDeviceLogs.size());
     }
 }
 
@@ -66,6 +67,10 @@ void WebServerModule::begin() {
 
     server->on("/config", HTTP_POST, [this](AsyncWebServerRequest *request) {
         handleConfigUpdate(request);
+    });
+
+    server->on("/download/logs/*", HTTP_GET, [this](AsyncWebServerRequest *request) {
+        handleDownloadLogs(request);
     });
 
     server->on("/open", HTTP_GET, [this](AsyncWebServerRequest *request) {
@@ -174,11 +179,25 @@ void WebServerModule::handleControl(AsyncWebServerRequest *request) {
         return;
     }
 
-    // Get device parameter
+    // Get device parameter (check both URL and POST parameters)
     String deviceId = "real"; // default
+    const AsyncWebParameter* deviceParam = nullptr;
+
+    // Check URL parameter first (for GET requests)
     if (request->hasParam("device")) {
-        deviceId = request->getParam("device")->value();
+        deviceParam = request->getParam("device");
     }
+    // Check POST parameter (for POST requests)
+    else if (request->hasParam("device", true)) {
+        deviceParam = request->getParam("device", true);
+    }
+
+    if (deviceParam) {
+        deviceId = deviceParam->value();
+    }
+
+    // Load logs for this device
+    loadDeviceLogs(deviceId);
 
     // Handle POST requests for relay control
     if (request->method() == HTTP_POST) {
@@ -192,6 +211,8 @@ void WebServerModule::handleControl(AsyncWebServerRequest *request) {
                 setRelayState(!getRelayState(), deviceId);
             }
         }
+        // Reload logs after action
+        loadDeviceLogs(deviceId);
     }
     request->send(200, "text/html", getControlPage(deviceId));
 }
@@ -211,7 +232,16 @@ void WebServerModule::handleLogsPage(AsyncWebServerRequest *request) {
         return;
     }
 
-    request->send(200, "text/html", getLogsPage());
+    // Get device parameter, default to "real"
+    String selectedDevice = "real";
+    if (request->hasParam("device")) {
+        selectedDevice = request->getParam("device")->value();
+    }
+
+    // Load logs for the selected device
+    loadDeviceLogs(selectedDevice);
+
+    request->send(200, "text/html", getLogsPage(selectedDevice));
 }
 
 void WebServerModule::handleConfigPage(AsyncWebServerRequest *request) {
@@ -316,6 +346,101 @@ void WebServerModule::handleConfigUpdate(AsyncWebServerRequest *request) {
 void WebServerModule::handleLogout(AsyncWebServerRequest *request) {
     sessionToken = "";
     request->redirect("/");
+}
+
+void WebServerModule::handleDownloadLogs(AsyncWebServerRequest *request) {
+    // Check authentication
+    bool isAuthenticated = false;
+    String sessionParam = "";
+
+    if (request->hasParam("session")) {
+        sessionParam = request->getParam("session")->value();
+        isAuthenticated = (sessionParam == sessionToken && validateSession(sessionToken));
+    }
+
+    if (!isAuthenticated) {
+        request->redirect("/");
+        return;
+    }
+
+    // Extract device ID from URL path
+    String url = request->url();
+    String deviceId = "real"; // default
+
+    // URL format: /download/logs/{deviceId}
+    int logsIndex = url.indexOf("/logs/");
+    if (logsIndex != -1) {
+        deviceId = url.substring(logsIndex + 6); // 6 = length of "/logs/"
+    }
+
+    // Load the device logs to ensure we have the latest
+    loadDeviceLogs(deviceId);
+
+    // Get filename
+    String filename = getDeviceLogFilename(deviceId);
+
+    if (!LittleFS.exists(filename)) {
+        request->send(404, "text/plain", "Log file not found");
+        return;
+    }
+
+    // Read the file
+    File file = LittleFS.open(filename, "r");
+    if (!file) {
+        request->send(500, "text/plain", "Error opening log file");
+        return;
+    }
+
+    // Get file size
+    size_t fileSize = file.size();
+    if (fileSize > 50000) { // 50KB limit for download
+        file.close();
+        request->send(413, "text/plain", "Log file too large to download");
+        return;
+    }
+
+    // Generate CSV content from the logs
+    String csvContent = "Fecha y Hora,Dispositivo,Ubicacion,Accion\n";
+
+    // Load the logs to get the enriched data
+    loadDeviceLogs(deviceId);
+
+    for (const auto& log : currentDeviceLogs) {
+        // Find device info for CSV
+        String deviceName = "Desconocido";
+        String location = "N/A";
+        for (const auto& device : devices) {
+            if (device.id == deviceId) {
+                deviceName = device.name;
+                location = device.location;
+                break;
+            }
+        }
+
+        // Escape commas in fields if needed
+        String timestamp = log.timestamp;
+        String action = log.action;
+
+        // Add to CSV (escape quotes if needed)
+        csvContent += "\"" + timestamp + "\",";
+        csvContent += "\"" + deviceName + "\",";
+        csvContent += "\"" + location + "\",";
+        csvContent += "\"" + action + "\"\n";
+    }
+
+    file.close();
+
+    // Generate timestamp for filename
+    String timestamp = getCurrentTime();
+    timestamp.replace(" ", "_");
+    timestamp.replace("-", "");
+    timestamp.replace(":", "");
+
+    // Set headers for CSV download
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/csv", csvContent);
+    response->addHeader("Content-Disposition", "attachment; filename=\"logs_" + deviceId + "_" + timestamp + ".csv\"");
+    response->addHeader("Content-Length", String(csvContent.length()));
+    request->send(response);
 }
 
 void WebServerModule::handleOpen(AsyncWebServerRequest *request) {
@@ -482,12 +607,14 @@ String WebServerModule::getControlPage(String deviceId) {
     html += "<div class='controls'>";
     html += "<form method='POST' action='/control' style='display: inline;'>";
     html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
+    html += "<input type='hidden' name='device' value='" + deviceId + "'>";
     html += "<input type='hidden' name='action' value='open'>";
     html += "<button type='submit' class='btn btn-success'>ABRIR</button>";
     html += "</form>";
 
     html += "<form method='POST' action='/control' style='display: inline; margin-left: 20px;'>";
     html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
+    html += "<input type='hidden' name='device' value='" + deviceId + "'>";
     html += "<input type='hidden' name='action' value='close'>";
     html += "<button type='submit' class='btn btn-danger'>CERRAR</button>";
     html += "</form>";
@@ -498,7 +625,7 @@ String WebServerModule::getControlPage(String deviceId) {
 
     html += "<div class='logs'>";
     html += "<h2>Historial</h2>";
-    html += getLogsHTML();
+    html += getDeviceLogsHTML(deviceId);
     html += "</div>";
 
     html += "</div>";
@@ -550,20 +677,34 @@ String WebServerModule::getControlPage(String deviceId) {
     return html;
 }
 
-String WebServerModule::getLogsPage() {
+String WebServerModule::getLogsPage(String selectedDevice) {
+
     String html = getHeader();
     html += getNavbar();
     html += "<div class='content'>";
     html += "<div class='logs-container'>";
     html += "<h1>Historial Completo</h1>";
-    html += "<h2>Sucursal 001</h2>";
+
+    // Device selector
+    html += "<div class='device-selector'>";
+    html += "<form method='GET' action='/logs' style='display: inline;'>";
+    html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
+    html += "<label for='device'>Seleccionar Dispositivo: </label>";
+    html += "<select name='device' id='device' onchange='this.form.submit()'>";
+    for (const auto& device : devices) {
+        String selected = (device.id == selectedDevice) ? " selected" : "";
+        html += "<option value='" + device.id + "'" + selected + ">" + device.name + " - " + device.location + "</option>";
+    }
+    html += "</select>";
+    html += "</form>";
+    html += "</div>";
 
     // Stats
     html += "<div class='stats'>";
-    html += "<p>Total de registros: " + String(logs.size()) + "</p>";
+    html += "<p>Total de registros: " + String(currentDeviceLogs.size()) + "</p>";
     String lastUpdate = "Nunca";
-    if (!logs.empty()) {
-        String ts = logs.back().timestamp;
+    if (!currentDeviceLogs.empty()) {
+        String ts = currentDeviceLogs.back().timestamp;
         // Check if timestamp looks valid (not 1969/1970)
         if (ts.startsWith("1969") || ts.startsWith("1970")) {
             lastUpdate = "Esperando sincronizacion NTP";
@@ -574,13 +715,17 @@ String WebServerModule::getLogsPage() {
     html += "<p>Ultima actualizacion: " + lastUpdate + "</p>";
     html += "</div>";
 
+    // Download button
+    html += "<div class='download-section'>";
+    html += "<a href='/download/logs/" + selectedDevice + "?session=" + sessionToken + "' class='btn btn-info'>Descargar Logs</a>";
+    html += "</div>";
+
     // Logs table
     html += "<div class='logs-section'>";
     html += "<h2>Historial de Comandos</h2>";
-    html += getAllLogsHTML();
+    html += getDeviceLogsHTML(selectedDevice);
     html += "</div>";
 
-    html += "</div>";
     html += "</div>";
     html += "</div>";
     html += getFooter();
@@ -606,6 +751,32 @@ String WebServerModule::getAllLogsHTML() {
     for (const auto& log : logs) {
         html += "<tr><td>" + log.timestamp + "</td><td>001</td><td>" + log.action + "</td></tr>";
     }
+    html += "</tbody></table>";
+    return html;
+}
+
+String WebServerModule::getDeviceLogsHTML(String deviceId) {
+    String html = "<table><thead><tr><th>Fecha y Hora</th><th>Dispositivo</th><th>Comando</th></tr></thead><tbody>";
+
+    // Find device info
+    String deviceName = "Desconocido";
+    String location = "N/A";
+    for (const auto& device : devices) {
+        if (device.id == deviceId) {
+            deviceName = device.name;
+            location = device.location;
+            break;
+        }
+    }
+
+    // Show last 10 logs on control page (most recent first)
+    size_t startIndex = (currentDeviceLogs.size() > 10) ? (currentDeviceLogs.size() - 10) : 0;
+
+    for (size_t i = currentDeviceLogs.size(); i > startIndex; --i) {
+        const auto& log = currentDeviceLogs[i-1];
+        html += "<tr><td>" + log.timestamp + "</td><td>" + deviceName + " (" + location + ")</td><td>" + log.action + "</td></tr>";
+    }
+
     html += "</tbody></table>";
     return html;
 }
@@ -779,17 +950,130 @@ String WebServerModule::getCurrentTime() {
     return String(buf);
 }
 
-void WebServerModule::addLog(String action) {
+void WebServerModule::addDeviceLog(String deviceId, String action) {
     String timestamp = getCurrentTime();
     LogEntry log = {timestamp, action};
-    logs.push_back(log);
-    if (logs.size() > 100) {
-        logs.erase(logs.begin());
+    currentDeviceLogs.push_back(log);
+    if (currentDeviceLogs.size() > 100) {
+        currentDeviceLogs.erase(currentDeviceLogs.begin());
     }
-    // Save to file
-    saveLogsToFile();
+    // Save to device-specific file
+    saveDeviceLogs(deviceId);
     // Send to WebSocket clients
     sendLogToClients(log);
+}
+
+String WebServerModule::getDeviceLogFilename(String deviceId) {
+    return "/logs_" + deviceId + ".json";
+}
+
+void WebServerModule::loadDeviceLogs(String deviceId) {
+    String filename = getDeviceLogFilename(deviceId);
+    if (!LittleFS.exists(filename)) {
+        Serial.printf("No logs file found for device %s, starting fresh\n", deviceId.c_str());
+        currentDeviceLogs.clear();
+        return;
+    }
+
+    File file = LittleFS.open(filename, "r");
+    if (!file) {
+        Serial.printf("Failed to open logs file for device %s\n", deviceId.c_str());
+        return;
+    }
+
+    // Check file size
+    size_t fileSize = file.size();
+    if (fileSize > 10000) { // 10KB limit
+        Serial.printf("Logs file for device %s too large, starting fresh\n", deviceId.c_str());
+        file.close();
+        currentDeviceLogs.clear();
+        return;
+    }
+
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, file);
+    file.close();
+
+    if (error) {
+        Serial.printf("Failed to parse logs file for device %s: %s\n", deviceId.c_str(), error.c_str());
+        return;
+    }
+
+    JsonArray array = doc.as<JsonArray>();
+    currentDeviceLogs.clear();
+
+    for (JsonObject logObj : array) {
+        String timestamp = logObj["timestamp"];
+        String action = logObj["action"];
+        currentDeviceLogs.push_back({timestamp, action});
+    }
+
+    Serial.printf("Successfully loaded %d logs for device %s\n", currentDeviceLogs.size(), deviceId.c_str());
+}
+
+void WebServerModule::saveDeviceLogs(String deviceId) {
+    String filename = getDeviceLogFilename(deviceId);
+    JsonDocument doc;
+    JsonArray array = doc.to<JsonArray>();
+
+    for (const auto& log : currentDeviceLogs) {
+        JsonObject logObj = array.add<JsonObject>();
+        logObj["timestamp"] = log.timestamp;
+        logObj["action"] = log.action;
+        logObj["deviceId"] = deviceId;
+        // Find device name and location
+        for (const auto& device : devices) {
+            if (device.id == deviceId) {
+                logObj["deviceName"] = device.name;
+                logObj["location"] = device.location;
+                break;
+            }
+        }
+    }
+
+    File file = LittleFS.open(filename, "w");
+    if (!file) {
+        Serial.printf("Failed to open logs file for device %s\n", deviceId.c_str());
+        return;
+    }
+
+    if (serializeJson(doc, file) == 0) {
+        Serial.printf("Failed to write logs for device %s\n", deviceId.c_str());
+    }
+
+    file.close();
+}
+
+void WebServerModule::migrateLegacyLogs() {
+    // Check if legacy logs file exists
+    if (!LittleFS.exists(LOGS_FILE)) {
+        return; // No legacy logs to migrate
+    }
+
+    // Load legacy logs
+    loadLogsFromFile();
+
+    if (logs.empty()) {
+        return; // No logs to migrate
+    }
+
+    Serial.println("Migrating legacy logs to device-specific files...");
+
+    // Move all legacy logs to "real" device
+    for (const auto& log : logs) {
+        currentDeviceLogs.push_back(log);
+    }
+
+    // Save to device-specific file
+    saveDeviceLogs("real");
+
+    // Remove legacy file
+    LittleFS.remove(LOGS_FILE);
+
+    Serial.printf("Migrated %d legacy logs to device 'real'\n", logs.size());
+
+    // Clear legacy logs vector
+    logs.clear();
 }
 
 void WebServerModule::sendLogToClients(LogEntry log) {
@@ -817,7 +1101,7 @@ void WebServerModule::loadLogsFromFile() {
         return;
     }
 
-    DynamicJsonDocument doc(10240); // 10KB
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, file);
     file.close();
 
@@ -839,11 +1123,11 @@ void WebServerModule::loadLogsFromFile() {
 }
 
 void WebServerModule::saveLogsToFile() {
-    DynamicJsonDocument doc(10240);
+    JsonDocument doc;
     JsonArray array = doc.to<JsonArray>();
 
     for (const auto& log : logs) {
-        JsonObject logObj = array.createNestedObject();
+        JsonObject logObj = array.add<JsonObject>();
         logObj["timestamp"] = log.timestamp;
         logObj["action"] = log.action;
     }
@@ -985,7 +1269,7 @@ void WebServerModule::setRelayState(bool state, String deviceId) {
     if (!isRealDevice) {
         action += " (DEMO - " + deviceId + ")";
     }
-    addLog(action);
+    addDeviceLog(deviceId, action);
 }
 
 bool WebServerModule::getRelayState() {
@@ -1002,5 +1286,5 @@ void WebServerModule::toggleRelayPulse() {
     buzzer->beepToggle();
 
     // Log the toggle action
-    addLog("APERTURA");
+    addDeviceLog("real", "APERTURA");
 }
