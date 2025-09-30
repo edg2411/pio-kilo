@@ -397,6 +397,8 @@ String WebServerModule::getLoginPage(bool error) {
 
 String WebServerModule::getDashboardPage() {
     String html = getHeader();
+    html += getNavbar();
+    html += "<div class='content'>";
     html += "<div class='dashboard-container'>";
     html += "<h1>Panel de Control Principal</h1>";
     html += "<h2>Sistema de Control de Acceso</h2>";
@@ -421,8 +423,7 @@ String WebServerModule::getDashboardPage() {
     }
     html += "</div>";
     html += "</div>";
-
-    html += getNavbar();
+    html += "</div>";
 
     // Add CSS for dashboard
     html += "<style>";
@@ -464,6 +465,8 @@ String WebServerModule::getControlPage(String deviceId) {
     }
 
     String html = getHeader();
+    html += getNavbar();
+    html += "<div class='content'>";
     html += "<div class='control-container'>";
     html += "<h1>Control de acceso</h1>";
     html += "<h2>" + deviceLocation + "</h2>";
@@ -498,7 +501,7 @@ String WebServerModule::getControlPage(String deviceId) {
     html += getLogsHTML();
     html += "</div>";
 
-    html += getNavbar();
+    html += "</div>";
     html += "</div>";
 
     // WebSocket client code
@@ -549,11 +552,11 @@ String WebServerModule::getControlPage(String deviceId) {
 
 String WebServerModule::getLogsPage() {
     String html = getHeader();
+    html += getNavbar();
+    html += "<div class='content'>";
     html += "<div class='logs-container'>";
     html += "<h1>Historial Completo</h1>";
     html += "<h2>Sucursal 001</h2>";
-
-    html += getNavbar();
 
     // Stats
     html += "<div class='stats'>";
@@ -573,10 +576,12 @@ String WebServerModule::getLogsPage() {
 
     // Logs table
     html += "<div class='logs-section'>";
-    html += "<h2>Historial de Comandoes</h2>";
+    html += "<h2>Historial de Comandos</h2>";
     html += getAllLogsHTML();
     html += "</div>";
 
+    html += "</div>";
+    html += "</div>";
     html += "</div>";
     html += getFooter();
     return html;
@@ -607,10 +612,10 @@ String WebServerModule::getAllLogsHTML() {
 
 String WebServerModule::getConfigPage() {
     String html = getHeader();
-    html += "<div class='config-container'>";
-    html += "<h1>Ajuste del Sistema</h1>";
-
     html += getNavbar();
+    html += "<div class='content'>";
+    html += "<div class='config-container'>";
+    html += "<h1>Ajustes del Sistema</h1>";
 
     // Success/Error messages
     if (sessionToken.length() > 0) {
@@ -687,7 +692,7 @@ String WebServerModule::getNavbar() {
     String html = "<div class='navbar'>";
     html += "<a href='/dashboard?session=" + sessionToken + "' class='nav-btn'>Dashboard</a>";
     html += "<a href='/logs?session=" + sessionToken + "' class='nav-btn'>Historial</a>";
-    html += "<a href='/config?session=" + sessionToken + "' class='nav-btn'>Ajuste</a>";
+    html += "<a href='/config?session=" + sessionToken + "' class='nav-btn'>Ajustes</a>";
     html += "<a href='/logout' class='nav-btn nav-logout'>Salir</a>";
     html += "</div>";
     return html;
@@ -698,13 +703,14 @@ String WebServerModule::getHeader() {
     html += "<title>Control de Acceso</title>";
     html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
     html += "<style>";
-    html += "body{font-family:Arial,sans-serif;margin:0;padding:20px;background:#f5f5f5;position:relative;}";
-    html += ".navbar{position:fixed;right:20px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px;z-index:1000;}";
-    html += ".nav-btn{display:block;padding:12px 20px;background:#007bff;color:white;text-decoration:none;border-radius:5px;text-align:center;font-size:14px;min-width:120px;}";
+    html += "body{font-family:Arial,sans-serif;margin:0;padding:0;background:#f5f5f5;display:flex;min-height:100vh;}";
+    html += ".navbar{flex:0 0 20%;background:#f8f9fa;padding:20px;display:flex;flex-direction:column;gap:15px;border-right:1px solid #dee2e6;}";
+    html += ".nav-btn{display:block;padding:15px 25px;background:#007bff;color:white;text-decoration:none;border-radius:5px;text-align:center;font-size:16px;font-weight:bold;margin-bottom:5px;}";
     html += ".nav-btn:hover{background:#0056b3;}";
     html += ".nav-logout{background:#dc3545;}";
     html += ".nav-logout:hover{background:#c82333;}";
-    html += ".login-container,.control-container,.dashboard-container{max-width:800px;margin:50px auto;padding:30px;background:white;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}";
+    html += ".content{flex:1;padding:20px;}";
+    html += ".login-container,.control-container,.dashboard-container{max-width:none;margin:0;padding:30px;background:white;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1);}";
     html += "h1{text-align:center;color:#333;margin-bottom:30px;}";
     html += "h2{margin-bottom:20px;color:#555;}";
     html += ".form-group{margin-bottom:15px;}";
