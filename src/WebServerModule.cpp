@@ -378,20 +378,20 @@ String WebServerModule::getControlPage() {
     // html += "</div>";
 
     html += "<div class='controls'>";
-    // Commented out old buttons for demo
-    // html += "<form method='POST' action='/control' style='display: inline;'>";
-    // html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
-    // html += "<input type='hidden' name='action' value='open'>";
-    // html += "<button type='submit' class='btn btn-success'>ABRIR</button>";
-    // html += "</form>";
+    html += "<form method='POST' action='/control' style='display: inline;'>";
+    html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
+    html += "<input type='hidden' name='action' value='open'>";
+    html += "<button type='submit' class='btn btn-success'>ABRIR</button>";
+    html += "</form>";
 
-    // html += "<form method='POST' action='/control' style='display: inline; margin-left: 20px;'>";
-    // html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
-    // html += "<input type='hidden' name='action' value='close'>";
-    // html += "<button type='submit' class='btn btn-danger'>CERRAR</button>";
-    // html += "</form>";
+    html += "<form method='POST' action='/control' style='display: inline; margin-left: 20px;'>";
+    html += "<input type='hidden' name='session' value='" + sessionToken + "'>";
+    html += "<input type='hidden' name='action' value='close'>";
+    html += "<button type='submit' class='btn btn-danger'>CERRAR</button>";
+    html += "</form>";
 
-    html += "<a href='/toggle?session=" + sessionToken + "' class='btn btn-success'>ABRIR</a>";
+    // Commented out toggle button for magnetic lock
+    // html += "<a href='/toggle?session=" + sessionToken + "' class='btn btn-success'>ABRIR</a>";
     html += "</div>";
 
     html += "<div class='logs'>";
