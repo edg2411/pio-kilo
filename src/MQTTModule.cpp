@@ -62,27 +62,25 @@ void MQTTModule::loadCertsFromSPIFFS() {
         if (initialLoad) Serial.println("No CA certificate found");
     }
 
-    // Load client certificate
+    // Load client certificate (optional)
     String clientCert = ConfigLoader::loadClientCert();
     if (clientCert.length() > 0 && clientCert.length() < 10000) {
         if (initialLoad) Serial.printf("Setting client certificate (%d bytes)\n", clientCert.length());
         netClient.setCertificate(clientCert.c_str());
     } else if (clientCert.length() >= 10000) {
         Serial.println("Client certificate too large, skipping");
-    } else {
-        if (initialLoad) Serial.println("No client certificate found");
     }
+    // No logging if not found, as it's optional
 
-    // Load private key
+    // Load private key (optional)
     String privateKey = ConfigLoader::loadPrivateKey();
     if (privateKey.length() > 0 && privateKey.length() < 10000) {
         if (initialLoad) Serial.printf("Setting private key (%d bytes)\n", privateKey.length());
         netClient.setPrivateKey(privateKey.c_str());
     } else if (privateKey.length() >= 10000) {
         Serial.println("Private key too large, skipping");
-    } else {
-        if (initialLoad) Serial.println("No private key found");
     }
+    // No logging if not found, as it's optional
 
     if (initialLoad) {
         Serial.println("Certificate loading completed");

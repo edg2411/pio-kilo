@@ -69,10 +69,12 @@ void setup() {
             ConfigLoader::getWiFiStaticDNS2()
         );
     }
-    byte mac[6];
-    ConfigLoader::getEthernetMAC(mac);
-    netManager->setEthernetConfig(mac, ConfigLoader::getEthernetIP(), ConfigLoader::getEthernetGateway(), ConfigLoader::getEthernetSubnet());
-    netManager->setLTEAPN(ConfigLoader::getLTEAPN(), ConfigLoader::getLTEUser(), ConfigLoader::getLTEPass());
+    // Ethernet not available on this board, skip setup
+    // byte mac[6];
+    // ConfigLoader::getEthernetMAC(mac);
+    // netManager->setEthernetConfig(mac, ConfigLoader::getEthernetIP(), ConfigLoader::getEthernetGateway(), ConfigLoader::getEthernetSubnet());
+    // LTE not available on this board, skip setup
+    // netManager->setLTEAPN(ConfigLoader::getLTEAPN(), ConfigLoader::getLTEUser(), ConfigLoader::getLTEPass());
 
     netManager->setOnConnectedCallback(onConnected);
     netManager->setOnDisconnectedCallback(onDisconnected);
