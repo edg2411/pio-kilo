@@ -25,4 +25,8 @@
 // LTE Modem type
 #define LTE_MODEM_TYPE      PPP_MODEM_SIM7600
 
+// GPIO pins for sensors
+#define BUTTON_PIN          27
+#define SOIL_MOISTURE_PIN   32
+
 #endif // BOARD_H

@@ -1,10 +1,15 @@
 #include <Arduino.h>
+#include "board.h"
 #include "NetworkController.h"
 #include "MQTTModule.h"
+#include "ButtonModule.h"
+#include "SoilMoistureModule.h"
 #include "ConfigLoader.h"
 
 NetworkController* netManager;
 MQTTModule* mqtt;
+ButtonModule* button;
+SoilMoistureModule* soilSensor;
 
 void onConnected(NetInterface interface) {
     Serial.print("Connected via ");
@@ -35,6 +40,8 @@ void setup() {
 
     netManager = new NetworkController();
     mqtt = new MQTTModule(netManager);
+    button = new ButtonModule(BUTTON_PIN, mqtt);
+    soilSensor = new SoilMoistureModule(SOIL_MOISTURE_PIN, mqtt);
 
     // Set MQTT broker from config
     mqtt->setBroker(ConfigLoader::getMQTTBroker(), ConfigLoader::getMQTTPort());
@@ -76,6 +83,10 @@ void setup() {
     delay(100);  // Small delay to ensure network is ready
     mqtt->loadCertsFromSPIFFS();
 
+    // Initialize sensor modules
+    button->begin();
+    soilSensor->begin();
+
     // Note: Subscription to command topic happens automatically when MQTT connects
 }
 
@@ -86,6 +97,7 @@ void loop() {
 
     netManager->update();
     mqtt->update();
+    button->update();
 
     // Send heartbeat every 30 seconds
     if (millis() - lastHeartbeat > 30000) {
@@ -97,12 +109,7 @@ void loop() {
 
     // Send sensor data every 10 seconds
     if (millis() - lastSensorReading > 10000) {
-        String sensorData = "{\"temperature\":" + String(random(20, 30)) +
-                           ",\"humidity\":" + String(random(40, 80)) +
-                           ",\"timestamp\":" + String(millis()) + "}";
-        if (mqtt->publishSensor(sensorData)) {
-            Serial.println("Sensor data sent");
-        }
+        soilSensor->publishMoisture();
         lastSensorReading = millis();
     }
 
@@ -116,6 +123,4 @@ void loop() {
         }
         lastStatusUpdate = millis();
     }
-
-    delay(1000);
 }
