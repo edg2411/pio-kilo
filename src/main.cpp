@@ -4,12 +4,14 @@
 #include "MQTTModule.h"
 #include "ButtonModule.h"
 #include "SoilMoistureModule.h"
+#include "DHTModule.h"
 #include "ConfigLoader.h"
 
 NetworkController* netManager;
 MQTTModule* mqtt;
 ButtonModule* button;
 SoilMoistureModule* soilSensor;
+DHTModule* dhtSensor;
 
 void onConnected(NetInterface interface) {
     Serial.print("Connected via ");
@@ -42,6 +44,7 @@ void setup() {
     mqtt = new MQTTModule(netManager);
     button = new ButtonModule(BUTTON_PIN, mqtt);
     soilSensor = new SoilMoistureModule(SOIL_MOISTURE_PIN, mqtt);
+    dhtSensor = new DHTModule(DHT_PIN, mqtt);
 
     // Set MQTT broker from config
     mqtt->setBroker(ConfigLoader::getMQTTBroker(), ConfigLoader::getMQTTPort());
@@ -88,6 +91,7 @@ void setup() {
     // Initialize sensor modules
     button->begin();
     soilSensor->begin();
+    dhtSensor->begin();
 
     // Note: Subscription to command topic happens automatically when MQTT connects
 }
@@ -112,6 +116,7 @@ void loop() {
     // Send sensor data every 10 seconds
     if (millis() - lastSensorReading > 10000) {
         soilSensor->publishMoisture();
+        dhtSensor->publishTemperatureHumidity();
         lastSensorReading = millis();
     }
 

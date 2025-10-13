@@ -28,5 +28,6 @@
 // GPIO pins for sensors
 #define BUTTON_PIN          27
 #define SOIL_MOISTURE_PIN   32
+#define DHT_PIN             26
 
 #endif // BOARD_H
