@@ -42,7 +42,8 @@ void NetworkController::begin() {
     // lte->setAPN("APN");
 
     // Start with first priority
-    attemptConnection(priorityOrder[0]);
+    attemptConnection(WIFI);
+    // attemptConnection(priorityOrder[0]);
 }
 
 void NetworkController::update() {
