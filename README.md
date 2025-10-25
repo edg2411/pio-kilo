@@ -1,12 +1,12 @@
 # ESP32 IoT Project with MQTT and WiFi Support
 
-A comprehensive ESP32 IoT project featuring JSON-based configuration, MQTT communication, WiFi static IP support, and robust network management.
+A comprehensive ESP32 IoT project featuring JSON-based configuration, Espressif MQTT communication, WiFi static IP support, and robust network management.
 
 ## 🚀 Features
 
 ### Core Functionality
 - **JSON Configuration**: All settings loaded from `data/config.json`
-- **MQTT Communication**: Secure MQTT with configurable topics and automatic reconnection
+- **MQTT Communication**: Secure MQTT via Espressif's native client with configurable topics and automatic reconnection
 - **WiFi Management**: DHCP or static IP configuration with failover support
 - **Network Resilience**: Automatic reconnection with rate limiting
 - **Command Handling**: Bidirectional MQTT communication with command callbacks
@@ -14,7 +14,7 @@ A comprehensive ESP32 IoT project featuring JSON-based configuration, MQTT commu
 ### Communication Features
 - **Heartbeat**: Periodic status updates (30s intervals)
 - **Sensor Data**: Simulated sensor readings (10s intervals)
-- **Status Updates**: System status reports (60s intervals)
+- **Status Updates**: System status reports (60s intervals) plus retained session snapshots on connect
 - **Command Reception**: Remote command handling with callbacks
 
 ### Network Architecture
@@ -31,7 +31,7 @@ A comprehensive ESP32 IoT project featuring JSON-based configuration, MQTT commu
 │   └── config.json.example  # Configuration template
 ├── include/                 # Header files
 │   ├── ConfigLoader.h      # JSON configuration loader
-│   ├── MQTTModule.h        # MQTT communication module
+│   ├── MQTTModule.h        # MQTT communication module (Espressif client)
 │   ├── NetworkController.h # Network management
 │   ├── WiFiModule.h        # WiFi functionality
 │   └── board.h             # Hardware pin definitions
@@ -121,7 +121,7 @@ pio run --target upload
 ### Publishing Topics
 - `home/heartbeat`: Device heartbeat with uptime and status
 - `home/sensor`: Sensor data (temperature, humidity, timestamp)
-- `home/status`: System status updates
+- `home/status`: System status updates (last connect snapshot retained)
 
 ### Subscribing Topics
 - `home/command`: Remote commands (JSON format)
@@ -163,6 +163,7 @@ The device provides detailed serial output:
 - `✅`: Success operations
 - `❌`: Error conditions
 - `ℹ️`: Informational messages
+- `⚠️`: Feature fallback hints (e.g., MQTT 5 unavailable on Arduino builds)
 
 ## 🐛 Troubleshooting
 

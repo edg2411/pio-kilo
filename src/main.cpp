@@ -7,11 +7,6 @@
 #include "DHTModule.h"
 #include "ConfigLoader.h"
 
-extern "C" {
-  #include "esp_event.h"
-  #include "mqtt_client.h"
-}
-
 NetworkController* netManager;
 MQTTModule* mqtt;
 ButtonModule* button;
