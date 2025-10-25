@@ -43,7 +43,7 @@ void setup() {
     netManager = new NetworkController();
     mqtt = new MQTTModule(netManager);
     button = new ButtonModule(BUTTON_PIN, mqtt);
-    soilSensor = new SoilMoistureModule(SOIL_MOISTURE_PIN, mqtt);
+    soilSensor = new SoilMoistureModule(SOIL_MOISTURE_POWER_PIN, SOIL_MOISTURE_ADC_PIN, mqtt);
     dhtSensor = new DHTModule(DHT_PIN, mqtt);
 
     // Set MQTT broker from config

@@ -26,8 +26,9 @@
 #define LTE_MODEM_TYPE      PPP_MODEM_SIM7600
 
 // GPIO pins for sensors
-#define BUTTON_PIN          27
-#define SOIL_MOISTURE_PIN   32
-#define DHT_PIN             26
+#define BUTTON_PIN              27
+#define SOIL_MOISTURE_POWER_PIN 33 
+#define SOIL_MOISTURE_ADC_PIN   32
+#define DHT_PIN                 26
 
 #endif // BOARD_H

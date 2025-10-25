@@ -1,17 +1,31 @@
 #include "SoilMoistureModule.h"
 #include "board.h"
 
-SoilMoistureModule::SoilMoistureModule(int pin, MQTTModule* mqtt, int dryValue, int wetValue)
-    : pin(pin), mqtt(mqtt), dryValue(dryValue), wetValue(wetValue) {}
+SoilMoistureModule::SoilMoistureModule(int powerPin, int adcPin, MQTTModule* mqtt, int dryValue, int wetValue)
+    : powerPin(powerPin), adcPin(adcPin), mqtt(mqtt), dryValue(dryValue), wetValue(wetValue) {}
 
 void SoilMoistureModule::begin() {
-    pinMode(pin, INPUT);
-    Serial.println("SoilMoistureModule initialized on pin " + String(pin));
+    pinMode(powerPin, OUTPUT);
+    digitalWrite(powerPin, LOW);  // Start with sensor powered off
+    pinMode(adcPin, INPUT);
+    Serial.println("SoilMoistureModule initialized - Power pin: " + String(powerPin) + ", ADC pin: " + String(adcPin));
     Serial.println("Calibration: Dry=" + String(dryValue) + ", Wet=" + String(wetValue));
 }
 
+void SoilMoistureModule::powerOn() {
+    digitalWrite(powerPin, HIGH);
+    delay(100);  // Allow sensor to stabilize
+}
+
+void SoilMoistureModule::powerOff() {
+    digitalWrite(powerPin, LOW);
+}
+
 int SoilMoistureModule::readADC() {
-    return analogRead(pin);
+    powerOn();
+    int value = analogRead(adcPin);
+    powerOff();
+    return value;
 }
 
 int SoilMoistureModule::calculateMoisturePercentage(int adcValue) {

@@ -6,16 +6,19 @@
 
 class SoilMoistureModule {
 private:
-    int pin;
+    int powerPin;
+    int adcPin;
     MQTTModule* mqtt;
     int dryValue;   // ADC value when dry (calibration)
     int wetValue;   // ADC value when wet (calibration)
 
+    void powerOn();
+    void powerOff();
     int readADC();
     int calculateMoisturePercentage(int adcValue);
 
 public:
-    SoilMoistureModule(int pin, MQTTModule* mqtt, int dryValue = 4095, int wetValue = 1800);
+    SoilMoistureModule(int powerPin, int adcPin, MQTTModule* mqtt, int dryValue = 4095, int wetValue = 1800);
     void begin();
     int getMoistureLevel();
     void publishMoisture();
