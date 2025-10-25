@@ -1,4 +1,5 @@
 #include "MQTTModule.h"
+#include "Logging.h"
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
 
@@ -79,7 +80,7 @@ void MQTTModule::setMQTT5(bool enable) {
 #endif
 
     if (enable && !supported) {
-        Serial.println("MQTT v5 support is not enabled in this build; falling back to MQTT 3.1.1");
+        LOGW(LogModule::MQTTModule, "MQTT v5 support is not enabled in this build; falling back to MQTT 3.1.1");
         useMQTT5 = false;
     } else {
         useMQTT5 = enable;
@@ -94,10 +95,10 @@ void MQTTModule::loadCertsFromSPIFFS() {
     bool firstRun = initialLog;
 
     if (firstRun) {
-        Serial.println("Loading certificates from SPIFFS...");
+        LOGI(LogModule::MQTTModule, "Loading certificates from SPIFFS...");
         initialLog = false;
     } else {
-        Serial.println("Reloading certificates for reconnection...");
+        LOGI(LogModule::MQTTModule, "Reloading certificates for reconnection...");
     }
 
     bool updated = false;
@@ -106,7 +107,7 @@ void MQTTModule::loadCertsFromSPIFFS() {
     String caCert = ConfigLoader::loadCACert();
     if (caCert.length() > 0 && caCert.length() < 10000) {  // Reasonable size check
         if (firstRun) {
-            Serial.printf("Setting CA certificate (%d bytes)\n", caCert.length());
+            LOGI(LogModule::MQTTModule, "Setting CA certificate (%d bytes)", caCert.length());
         }
         if (caCert != caCertPem) {
             caCertPem = caCert;
@@ -115,10 +116,10 @@ void MQTTModule::loadCertsFromSPIFFS() {
             updated = true;
         }
     } else if (caCert.length() >= 10000) {
-        Serial.println("CA certificate too large, skipping");
+        LOGW(LogModule::MQTTModule, "CA certificate too large, skipping");
     } else {
         if (firstRun) {
-            Serial.println("No CA certificate found");
+            LOGI(LogModule::MQTTModule, "No CA certificate found");
         }
         if (!caCertPem.isEmpty()) {
             caCertPem = "";
@@ -132,7 +133,7 @@ void MQTTModule::loadCertsFromSPIFFS() {
     String clientCert = ConfigLoader::loadClientCert();
     if (clientCert.length() > 0 && clientCert.length() < 10000) {
         if (firstRun) {
-            Serial.printf("Setting client certificate (%d bytes)\n", clientCert.length());
+            LOGI(LogModule::MQTTModule, "Setting client certificate (%d bytes)", clientCert.length());
         }
         if (clientCert != clientCertPem) {
             clientCertPem = clientCert;
@@ -140,7 +141,7 @@ void MQTTModule::loadCertsFromSPIFFS() {
             updated = true;
         }
     } else if (clientCert.length() >= 10000) {
-        Serial.println("Client certificate too large, skipping");
+        LOGW(LogModule::MQTTModule, "Client certificate too large, skipping");
     } else if (!clientCertPem.isEmpty()) {
         clientCertPem = "";
         mqttConfig.credentials.authentication.certificate = nullptr;
@@ -151,7 +152,7 @@ void MQTTModule::loadCertsFromSPIFFS() {
     String privateKey = ConfigLoader::loadPrivateKey();
     if (privateKey.length() > 0 && privateKey.length() < 10000) {
         if (firstRun) {
-            Serial.printf("Setting private key (%d bytes)\n", privateKey.length());
+            LOGI(LogModule::MQTTModule, "Setting private key (%d bytes)", privateKey.length());
         }
         if (privateKey != privateKeyPem) {
             privateKeyPem = privateKey;
@@ -159,7 +160,7 @@ void MQTTModule::loadCertsFromSPIFFS() {
             updated = true;
         }
     } else if (privateKey.length() >= 10000) {
-        Serial.println("Private key too large, skipping");
+        LOGW(LogModule::MQTTModule, "Private key too large, skipping");
     } else if (!privateKeyPem.isEmpty()) {
         privateKeyPem = "";
         mqttConfig.credentials.authentication.key = nullptr;
@@ -171,9 +172,9 @@ void MQTTModule::loadCertsFromSPIFFS() {
     }
 
     if (firstRun) {
-        Serial.println("Certificate loading completed");
+        LOGI(LogModule::MQTTModule, "Certificate loading completed");
     } else {
-        Serial.println("Certificate reloading completed");
+        LOGI(LogModule::MQTTModule, "Certificate reloading completed");
     }
 }
 
@@ -183,11 +184,11 @@ bool MQTTModule::connect() {
     }
 
     if (!isConfigReady()) {
-        Serial.println("MQTT broker not configured, cannot connect");
+        LOGW(LogModule::MQTTModule, "MQTT broker not configured, cannot connect");
         return false;
     }
 
-    Serial.println("Attempting MQTT connection...");
+    LOGI(LogModule::MQTTModule, "Attempting MQTT connection...");
 
     // Reload certificates before connecting (in case of corruption)
     loadCertsFromSPIFFS();
@@ -197,17 +198,17 @@ bool MQTTModule::connect() {
     }
 
     if (!mqttClient) {
-        Serial.println("❌ Failed to initialize MQTT client handle");
+        LOGE(LogModule::MQTTModule, "Failed to initialize MQTT client handle");
         return false;
     }
 
     esp_err_t err = esp_mqtt_client_start(mqttClient);
     if (err == ESP_OK) {
-        Serial.println("✅ MQTT client started successfully");
+        LOGI(LogModule::MQTTModule, "MQTT client started successfully");
         // Connection status will be updated via event handler
         return true;
     } else {
-        Serial.printf("❌ Failed to start MQTT client: %s\n", esp_err_to_name(err));
+        LOGE(LogModule::MQTTModule, "Failed to start MQTT client: %s", esp_err_to_name(err));
         return false;
     }
 }
@@ -219,10 +220,10 @@ void MQTTModule::disconnect() {
     }
 
     if (connected) {
-        Serial.println("MQTT disconnecting...");
+        LOGI(LogModule::MQTTModule, "MQTT disconnecting...");
         esp_mqtt_client_stop(mqttClient);
         connected = false;
-        Serial.println("MQTT disconnected");
+        LOGI(LogModule::MQTTModule, "MQTT disconnected");
     } else {
         esp_mqtt_client_stop(mqttClient);
     }
@@ -239,7 +240,7 @@ void MQTTModule::update() {
     if (!connected && netController->getState() == CONNECTED) {
         // Only attempt reconnection if enough time has passed
         if (millis() - lastReconnectAttempt > reconnectDelay) {
-            Serial.println("Network is connected, attempting MQTT reconnection...");
+            LOGI(LogModule::MQTTModule, "Network is connected, attempting MQTT reconnection...");
             lastReconnectAttempt = millis();
             connect();
         }
@@ -251,7 +252,7 @@ bool MQTTModule::publish(const char* topic, const char* payload, int qos, bool r
 
     int actualQoS = (qos == -1) ? defaultQoS : qos;
     int msg_id = esp_mqtt_client_publish(mqttClient, topic, payload, strlen(payload), actualQoS, retain ? 1 : 0);
-    return (msg_id > 0);
+    return (msg_id >= 0);
 }
 
 bool MQTTModule::subscribe(const char* topic, int qos) {
@@ -259,42 +260,26 @@ bool MQTTModule::subscribe(const char* topic, int qos) {
 
     int actualQoS = (qos == -1) ? defaultQoS : qos;
     int msg_id = esp_mqtt_client_subscribe(mqttClient, topic, actualQoS);
-    return (msg_id > 0);
+    return (msg_id >= 0);
 }
 
 void MQTTModule::handleMessage(char* topic, byte* payload, unsigned int length) {
-    // Handle incoming messages
-    Serial.print("MQTT Message arrived [");
-    Serial.print(topic);
-    Serial.print("] ");
-    for (int i = 0; i < length; i++) {
-        Serial.print((char)payload[i]);
+    String message;
+    message.reserve(length);
+    for (unsigned int i = 0; i < length; i++) {
+        message += static_cast<char>(payload[i]);
     }
-    Serial.println();
 
-    // Debug: Print configured command topic
-    Serial.print("Configured command topic: ");
-    Serial.println(commandTopic);
+    LOGI(LogModule::MQTTModule, "MQTT message arrived [%s] %s", topic, message.c_str());
+    LOGD(LogModule::MQTTModule, "Configured command topic: %s", commandTopic.c_str());
+    LOGD(LogModule::MQTTModule, "Comparing '%s' with '%s'", topic, commandTopic.c_str());
 
-    // Handle commands
     String topicStr = String(topic);
-    String message = "";
-    for (int i = 0; i < length; i++) {
-        message += (char)payload[i];
-    }
-
-    Serial.print("Comparing '");
-    Serial.print(topicStr);
-    Serial.print("' with '");
-    Serial.print(commandTopic);
-    Serial.println("'");
-
     if (topicStr == commandTopic) {
-        Serial.print("✅ Received command: ");
-        Serial.println(message);
+        LOGI(LogModule::MQTTModule, "Received command: %s", message.c_str());
         // Handle command here
     } else {
-        Serial.println("❌ Topic does not match command topic");
+        LOGD(LogModule::MQTTModule, "Topic does not match command topic");
     }
 }
 
@@ -336,13 +321,13 @@ void MQTTModule::rebuildClient() {
 
     mqttClient = esp_mqtt_client_init(&mqttConfig);
     if (!mqttClient) {
-        Serial.println("❌ Unable to initialize MQTT client with current configuration");
+        LOGE(LogModule::MQTTModule, "Unable to initialize MQTT client with current configuration");
         return;
     }
 
     esp_err_t err = esp_mqtt_client_register_event(mqttClient, MQTT_EVENT_ANY, mqtt_event_handler, this);
     if (err != ESP_OK) {
-        Serial.printf("❌ Failed to register MQTT event handler: %s\n", esp_err_to_name(err));
+        LOGE(LogModule::MQTTModule, "Failed to register MQTT event handler: %s", esp_err_to_name(err));
     }
 }
 
@@ -358,22 +343,22 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch ((esp_mqtt_event_id_t)event_id) {
         case MQTT_EVENT_CONNECTED:
             mqttModule->setConnected(true);
-            Serial.println("✅ MQTT connected successfully");
+            LOGI(LogModule::MQTTModule, "MQTT connected successfully");
 
             // Subscribe to command topic after successful connection
             if (!mqttModule->getCommandTopic().isEmpty()) {
                 delay(100);  // Small delay before subscribing
                 if (mqttModule->subscribe(mqttModule->getCommandTopic().c_str())) {
-                    Serial.println("✅ Subscribed to command topic: " + mqttModule->getCommandTopic());
+                    LOGI(LogModule::MQTTModule, "Subscribed to command topic: %s", mqttModule->getCommandTopic().c_str());
                 } else {
-                    Serial.println("❌ Failed to subscribe to command topic");
+                    LOGE(LogModule::MQTTModule, "Failed to subscribe to command topic");
                 }
             }
             break;
 
         case MQTT_EVENT_DISCONNECTED:
             mqttModule->setConnected(false);
-            Serial.println("❌ MQTT disconnected");
+            LOGW(LogModule::MQTTModule, "MQTT disconnected");
             break;
 
         case MQTT_EVENT_DATA:
@@ -388,7 +373,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             break;
 
         case MQTT_EVENT_ERROR:
-            Serial.println("MQTT_EVENT_ERROR");
+            LOGE(LogModule::MQTTModule, "MQTT_EVENT_ERROR");
             break;
 
         default:

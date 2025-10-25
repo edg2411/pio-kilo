@@ -1,5 +1,6 @@
 #include "SoilMoistureModule.h"
 #include "board.h"
+#include "Logging.h"
 
 SoilMoistureModule::SoilMoistureModule(int powerPin, int adcPin, MQTTModule* mqtt, int dryValue, int wetValue)
     : powerPin(powerPin), adcPin(adcPin), mqtt(mqtt), dryValue(dryValue), wetValue(wetValue) {}
@@ -8,8 +9,8 @@ void SoilMoistureModule::begin() {
     pinMode(powerPin, OUTPUT);
     digitalWrite(powerPin, LOW);  // Start with sensor powered off
     pinMode(adcPin, INPUT);
-    Serial.println("SoilMoistureModule initialized - Power pin: " + String(powerPin) + ", ADC pin: " + String(adcPin));
-    Serial.println("Calibration: Dry=" + String(dryValue) + ", Wet=" + String(wetValue));
+    LOGI(LogModule::SoilMoistureModule, "Initialized (Power pin: %d, ADC pin: %d)", powerPin, adcPin);
+    LOGI(LogModule::SoilMoistureModule, "Calibration Dry=%d Wet=%d", dryValue, wetValue);
 }
 
 void SoilMoistureModule::powerOn() {
@@ -51,8 +52,8 @@ void SoilMoistureModule::publishMoisture() {
                      ",\"timestamp\":" + String(millis()) + "}";
 
     if (mqtt->publishSensor(message)) {
-        Serial.println("Soil moisture published: " + String(moisture) + "% (ADC: " + String(adcValue) + ")");
+        LOGI(LogModule::SoilMoistureModule, "Soil moisture published: %d%% (ADC: %d)", moisture, adcValue);
     } else {
-        Serial.println("Failed to publish soil moisture");
+        LOGE(LogModule::SoilMoistureModule, "Failed to publish soil moisture");
     }
 }

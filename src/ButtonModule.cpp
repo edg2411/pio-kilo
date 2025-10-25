@@ -1,5 +1,6 @@
 #include "ButtonModule.h"
 #include "board.h"
+#include "Logging.h"
 
 ButtonModule::ButtonModule(int pin, MQTTModule* mqtt) : pin(pin), mqtt(mqtt), lastStableState(HIGH), lastReading(HIGH), lastDebounceTime(0), isPressed(false) {}
 
@@ -36,8 +37,8 @@ void ButtonModule::update() {
 void ButtonModule::publishEvent(const String& event) {
     String message = "{\"button\":\"" + event + "\",\"timestamp\":" + String(millis()) + "}";
     if (mqtt->publishSensor(message)) {
-        Serial.println("Button event published: " + event);
+        LOGI(LogModule::ButtonModule, "Button event published: %s", event.c_str());
     } else {
-        Serial.println("Failed to publish button event");
+        LOGE(LogModule::ButtonModule, "Failed to publish button event");
     }
 }

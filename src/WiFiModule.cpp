@@ -1,4 +1,5 @@
 #include "WiFiModule.h"
+#include "Logging.h"
 
 WiFiModule::WiFiModule() : connected(false), connecting(false), useStaticIP(false) {}
 
@@ -28,9 +29,9 @@ bool WiFiModule::connect() {
 
         // Configure static IP if enabled
         if (useStaticIP) {
-            Serial.println("Configuring WiFi static IP...");
+            LOGI(LogModule::WiFiModule, "Configuring WiFi static IP...");
             if (!WiFi.config(staticIP, staticGateway, staticSubnet, staticDNS1, staticDNS2)) {
-                Serial.println("Failed to configure static IP");
+                LOGE(LogModule::WiFiModule, "Failed to configure static IP");
             }
         }
     }

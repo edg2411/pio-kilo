@@ -1,21 +1,22 @@
 #include "ConfigLoader.h"
+#include "Logging.h"
 
 JsonDocument ConfigLoader::config;
 
 bool ConfigLoader::loadConfig() {
     if (!LittleFS.begin(true)) {
-        Serial.println("LittleFS Mount Failed");
+        LOGE(LogModule::ConfigLoader, "LittleFS mount failed");
         return false;
     }
     File file = LittleFS.open("/config.json", "r");
     if (!file) {
-        Serial.println("Failed to open config.json");
+        LOGE(LogModule::ConfigLoader, "Failed to open config.json");
         return false;
     }
     DeserializationError error = deserializeJson(config, file);
     file.close();
     if (error) {
-        Serial.println("Failed to parse config.json");
+        LOGE(LogModule::ConfigLoader, "Failed to parse config.json");
         return false;
     }
     return true;
@@ -140,14 +141,13 @@ String ConfigLoader::getMQTTHeartbeatTopic() {
 
 String ConfigLoader::loadCACert() {
     if (!LittleFS.begin(false)) {  // false = don't format if mount fails
-        Serial.println("LittleFS not initialized for CA cert loading");
+    LOGE(LogModule::ConfigLoader, "LittleFS not initialized for CA cert loading");
         return "";
     }
     String filename = "/" + getCACertFilename();
     File file = LittleFS.open(filename, "r");
     if (!file) {
-        Serial.print("Failed to open CA cert file: ");
-        Serial.println(filename);
+    LOGE(LogModule::ConfigLoader, "Failed to open CA cert file: %s", filename.c_str());
         return "";
     }
     String cert = file.readString();
@@ -157,14 +157,17 @@ String ConfigLoader::loadCACert() {
 
 String ConfigLoader::loadClientCert() {
     if (!LittleFS.begin(false)) {  // false = don't format if mount fails
-        Serial.println("LittleFS not initialized for client cert loading");
+    LOGE(LogModule::ConfigLoader, "LittleFS not initialized for client cert loading");
         return "";
     }
     String filename = "/" + getClientCertFilename();
+    if (!LittleFS.exists(filename)) {
+        LOGD(LogModule::ConfigLoader, "Client cert file not present (%s)", filename.c_str());
+        return "";
+    }
     File file = LittleFS.open(filename, "r");
     if (!file) {
-        Serial.print("Failed to open client cert file: ");
-        Serial.println(filename);
+        LOGE(LogModule::ConfigLoader, "Failed to open client cert file: %s", filename.c_str());
         return "";
     }
     String cert = file.readString();
@@ -174,14 +177,17 @@ String ConfigLoader::loadClientCert() {
 
 String ConfigLoader::loadPrivateKey() {
     if (!LittleFS.begin(false)) {  // false = don't format if mount fails
-        Serial.println("LittleFS not initialized for private key loading");
+    LOGE(LogModule::ConfigLoader, "LittleFS not initialized for private key loading");
         return "";
     }
     String filename = "/" + getPrivateKeyFilename();
+    if (!LittleFS.exists(filename)) {
+        LOGD(LogModule::ConfigLoader, "Private key file not present (%s)", filename.c_str());
+        return "";
+    }
     File file = LittleFS.open(filename, "r");
     if (!file) {
-        Serial.print("Failed to open private key file: ");
-        Serial.println(filename);
+        LOGE(LogModule::ConfigLoader, "Failed to open private key file: %s", filename.c_str());
         return "";
     }
     String key = file.readString();

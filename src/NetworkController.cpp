@@ -3,6 +3,7 @@
 #include "EthernetModule.h"
 #include "LTEModule.h"
 #include "board.h"
+#include "Logging.h"
 
 NetworkController* NetworkController::instance = nullptr;
 
@@ -34,7 +35,7 @@ void NetworkController::begin() {
     // lteSerial->begin(LTE_SERIAL_BAUD, SERIAL_8N1, LTE_RX_PIN, LTE_TX_PIN);
     // lte = new LTEModule(lteSerial);
     lte = nullptr;  // Set to null to prevent crashes
-    Serial.println("LTE hardware initialization skipped");
+    LOGI(LogModule::NetworkController, "LTE hardware initialization skipped");
 
     // Set default credentials (user should set via methods)
     // wifi->setCredentials("SSID", "PASS");
@@ -186,7 +187,7 @@ void NetworkController::setLTEAPN(const String& apn, const String& user, const S
     if (lte) {
         lte->setAPN(apn, user, pass);
     } else {
-        Serial.println("LTE not available, skipping APN setup");
+    LOGW(LogModule::NetworkController, "LTE not available, skipping APN setup");
     }
 }
 
