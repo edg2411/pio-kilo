@@ -7,6 +7,11 @@
 #include "DHTModule.h"
 #include "ConfigLoader.h"
 
+extern "C" {
+  #include "esp_event.h"
+  #include "mqtt_client.h"
+}
+
 NetworkController* netManager;
 MQTTModule* mqtt;
 ButtonModule* button;
@@ -42,6 +47,7 @@ void setup() {
 
     netManager = new NetworkController();
     mqtt = new MQTTModule(netManager);
+    mqtt->setMQTT5(true);
     button = new ButtonModule(BUTTON_PIN, mqtt);
     soilSensor = new SoilMoistureModule(SOIL_MOISTURE_POWER_PIN, SOIL_MOISTURE_ADC_PIN, mqtt);
     dhtSensor = new DHTModule(DHT_PIN, mqtt);
@@ -100,10 +106,28 @@ void loop() {
     static unsigned long lastHeartbeat = 0;
     static unsigned long lastSensorReading = 0;
     static unsigned long lastStatusUpdate = 0;
+    static bool lastMQTTConnected = false;
+    static uint32_t sessionCount = 0;
 
     netManager->update();
     mqtt->update();
     button->update();
+
+    bool mqttConnected = mqtt->isConnected();
+    if (mqttConnected && !lastMQTTConnected) {
+        sessionCount++;
+        unsigned long uptimeSeconds = millis() / 1000;
+        String retainedStatus = "{\"session\":" + String(sessionCount) +
+                                ",\"uptime_seconds\":" + String(uptimeSeconds) +
+                                ",\"timestamp_ms\":" + String(millis()) +
+                                "}";
+        if (mqtt->publishStatus(retainedStatus, true)) {
+            Serial.println("Retained status published");
+        } else {
+            Serial.println("Failed to publish retained status");
+        }
+    }
+    lastMQTTConnected = mqttConnected;
 
     // Send heartbeat every 30 seconds
     if (millis() - lastHeartbeat > 30000) {
